@@ -43,8 +43,18 @@
 </header>
 
 <main>
+  <!-- 合言葉 -->
+  <section class="card" id="gateCard">
+    <h2>合言葉</h2>
+    <div class="row">
+      <input id="gateCode" type="password" placeholder="運営の合言葉" autocomplete="off" />
+      <button class="primary" onclick="checkGate()">入る</button>
+    </div>
+    <div class="msg" id="gateMsg">関係者以外は入れません。</div>
+  </section>
+
   <!-- ログイン -->
-  <section class="card" id="loginCard">
+  <section class="card hidden" id="loginCard">
     <h2>運営スタッフのログイン</h2>
     <div class="row">
       <input id="email" type="email" placeholder="メールアドレス" autocomplete="username" />
@@ -121,6 +131,31 @@ const ANON_KEY = "sb_publishable_uFZkixZQjcm7E3ZohcLw4Q_MktOtmn2";
 const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼の槍","火星の弓","フレイムソード"];
 
 let token = null, uid = null, cfg = {};
+
+// 合言葉（ファイルには「ハッシュ」だけを書いておく）
+const GATE_HASH = 0xd9dbc382;
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  return h >>> 0;
+}
+function checkGate() {
+  const v = $("gateCode").value.trim().toUpperCase();
+  if (fnv1a(v) === GATE_HASH) {
+    sessionStorage.setItem("ow_gate", "1");
+    $("gateCard").classList.add("hidden");
+    $("loginCard").classList.remove("hidden");
+    $("email").focus();
+  } else {
+    msg("gateMsg", "合言葉が違います", "err");
+  }
+}
+if (sessionStorage.getItem("ow_gate") === "1") {
+  document.addEventListener("DOMContentLoaded", function () {
+    const g = document.getElementById("gateCard"); if (g) g.classList.add("hidden");
+    const l = document.getElementById("loginCard"); if (l) l.classList.remove("hidden");
+  });
+}
 
 const $ = id => document.getElementById(id);
 const msg = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = "msg " + (cls||""); };
