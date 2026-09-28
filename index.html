@@ -99,8 +99,9 @@
           <button id="day2" onclick="setDay(2)">夜固定</button>
         </div>
         <div class="row">
-          <label>モンスターの出現</label>
-          <button id="spawnBtn" onclick="toggleSpawn()">-</button>
+          <label>マスター解放</label>
+          <button id="masterBtn" onclick="toggleMaster()">-</button>
+          <span class="sub">ONにすると全員（またはマスター）に全武器・全スキンが解放されます</span>
         </div>
         <div class="row">
           <label>強さの倍率</label>
@@ -387,7 +388,24 @@ async function api(path, opts = {}) {
     "Content-Type": "application/json"
   }, opts.headers || {});
   const res = await fetch(SUPABASE_URL + path, Object.assign({}, opts, { headers }));
+  if (!res.ok && !path.startsWith("/auth/")) {
+    let body = "";
+    try { body = await res.clone().text(); } catch (e) {}
+    banner("通信エラー HTTP " + res.status + "：" + body.substring(0, 180));
+  }
   return res;
+}
+
+// 画面の上に常に見えるエラー表示（黙って失敗しないように）
+function banner(text) {
+  let el = $("sysBanner");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "sysBanner";
+    el.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99;background:#5a1f1f;color:#ffdede;padding:10px 14px;font-size:13px;white-space:pre-wrap";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
 }
 
 async function login() {
@@ -442,8 +460,8 @@ async function loadConfig() {
   cfg = {};
   rows.forEach(r => cfg[r.key] = r.value);
 
-  $("spawnBtn").textContent = cfg.spawnOff === "1" ? "止めている" : "出る（ON）";
-  $("spawnBtn").className = cfg.spawnOff === "1" ? "danger" : "on";
+  if ($("spawnBtn")) { $("spawnBtn").textContent = cfg.spawnOff === "1" ? "止めている" : "出る（ON）"; $("spawnBtn").className = cfg.spawnOff === "1" ? "danger" : "on"; }
+  if ($("masterBtn")) { $("masterBtn").textContent = cfg.master === "1" ? "ON" : "OFF"; $("masterBtn").className = cfg.master === "1" ? "on" : ""; }
   $("monsterMul").value = cfg.monsterMul || "1";
   $("dropMul").value = cfg.dropMul || "1";
 
@@ -522,6 +540,17 @@ async function loadConfig() {
       <td><input id="id_${it}" value="${esc(cfg["i."+it+".desc"] || "")}" placeholder="説明" style="width:280px" /></td></tr>`;
   });
   $("itemInfo").innerHTML = ih;
+
+  // 追加・削除・素材まわりも再描画（保存後に反映されない不具合の修正）
+  renderCodes();
+  renderWeaponMats();
+  renderSkinMats();
+  renderDeleteLists();
+  renderMatRate();
+  drawDropMatTabs();
+  renderMatDropTable();
+  renderAdded();
+  renderDesigns();
 }
 
 async function put(key, value) {
@@ -532,6 +561,12 @@ async function put(key, value) {
   });
   if (!res.ok) throw new Error(await res.text());
   cfg[key] = String(value);
+}
+
+async function toggleMaster() {
+  const on = cfg.master === "1" ? "0" : "1";
+  try { await put("master", on); msg("monsterMsg", on === "1" ? "マスター解放をONにしました" : "OFFにしました", "ok"); await loadConfig(); }
+  catch (e) { msg("monsterMsg", "保存に失敗：" + e.message, "err"); }
 }
 
 async function toggleSpawn() {
