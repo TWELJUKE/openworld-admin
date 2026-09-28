@@ -111,10 +111,58 @@
     </div>
 
     <section class="card">
-      <h2>武器の攻撃力</h2>
+      <h2>モンスター（種類ごとの設定）</h2>
+      <div class="sub" style="margin-bottom:8px">属性：火は木に、木は水に、水は火に、光と闇は互いに強い</div>
+      <table id="monsters"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMonsters()">保存</button></div>
+      <div class="msg" id="monMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>出現テーブル（エリアごとのモンスターと頻度）</h2>
+      <div class="row" id="areaTabs"></div>
+      <div class="sub" style="margin-bottom:8px">頻度 0＝出さない / 30＝標準 / 100＝よく出る（合計に対する割合で抽選されます）</div>
+      <table id="spawnTable"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSpawn()">保存</button></div>
+      <div class="msg" id="spawnMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>ドロップ率（アイテム・素材ごと）</h2>
+      <table id="drops"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveDrops()">保存</button></div>
+      <div class="msg" id="dropMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>テストコード（公開前の調整用）</h2>
+      <div class="row">
+        <input id="testMemo" placeholder="用途メモ（例：新武器の当たり判定テスト）" style="flex:1;min-width:240px" />
+        <button class="primary" onclick="genCode()">コードを生成</button>
+      </div>
+      <div id="codes"></div>
+      <div class="msg" id="codeMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>武器の設定（攻撃力・属性・属性ダメージ）</h2>
       <table id="weapons"></table>
       <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeapons()">保存</button></div>
       <div class="msg" id="weaponMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>スキンの設定（属性・属性ダメージ）</h2>
+      <table id="skins"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSkins()">保存</button></div>
+      <div class="msg" id="skinMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>アイテム・素材の情報</h2>
+      <table id="itemInfo"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveItemInfo()">保存</button></div>
+      <div class="msg" id="itemMsg"></div>
     </section>
 
     <section class="card">
@@ -128,7 +176,12 @@
 <script>
 const SUPABASE_URL = "https://eoundtxbupxbrfccejlk.supabase.co";
 const ANON_KEY = "sb_publishable_uFZkixZQjcm7E3ZohcLw4Q_MktOtmn2";
-const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼の槍","火星の弓","フレイムソード"];
+const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼の槍","火星の弓","フレイムソード","宝石の刃剣","氷竜剣","紅竜戦斧","翠竜剣"];
+const SKINS   = ["標準(白)","赤","青","緑","金","黒","フレイムドラゴン"];
+const ITEMS   = ["酸素の素","食料","肉","皮","鉱石","フレイムドラゴンの翼","フレイムドラゴンの頭","フレイムソードの設計図","フレイムドラゴンのスキンの設計図","ダークの証"];
+const MONSTERS = ["ストーンゴーレム","スパイダー","ゾンビ","骨弓兵","魔法使い","飛行型","近接の敵","鈍い敵","レッドドラゴン","ブルードラゴン","グリーンドラゴン","ダークドラゴン"];
+const AREAS = ["火山","異世界","宇宙","森林","氷山"];
+const ELEMS = ["無","火","水","木","光","闇"];
 
 let token = null, uid = null, cfg = {};
 
@@ -200,7 +253,8 @@ async function login() {
 
 function logout() { location.reload(); }
 
-async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); }
+let curArea = 0;
+async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); buildAreaTabs(); }
 
 async function loadConfig() {
   const res = await api("/rest/v1/config?select=key,value");
@@ -216,12 +270,68 @@ async function loadConfig() {
   const day = parseInt(cfg.dayOverride || "0", 10);
   [0,1,2].forEach(i => $("day"+i).className = (i===day ? "on" : ""));
 
-  let html = "<tr><th>武器</th><th>攻撃力</th></tr>";
+  // モンスター
+  let mh = "<tr><th>モンスター</th><th>属性</th><th>HP倍率</th><th>攻撃倍率</th><th>速度倍率</th></tr>";
+  MONSTERS.forEach(m => {
+    const el = cfg["m." + m + ".elem"] || "無";
+    const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
+    mh += `<tr><td>${m}</td>
+      <td><select id="el_${m}">${opts}</select></td>
+      <td><input id="hp_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".hp"] || ""}" placeholder="1.0" style="width:90px" /></td>
+      <td><input id="dm_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".dmg"] || ""}" placeholder="1.0" style="width:90px" /></td>
+      <td><input id="sp_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".spd"] || ""}" placeholder="1.0" style="width:90px" /></td></tr>`;
+  });
+  $("monsters").innerHTML = mh;
+
+  // 出現テーブル
+  let sh = "<tr><th>モンスター</th><th>頻度(0-100)</th></tr>";
+  MONSTERS.forEach(m => {
+    const v = cfg["s." + curArea + "." + m];
+    sh += `<tr><td>${m}</td><td><input id="sp_${curArea}_${m}" type="number" min="0" max="100" value="${v === undefined ? "" : v}" placeholder="標準30" style="width:110px" /></td></tr>`;
+  });
+  $("spawnTable").innerHTML = sh;
+
+  // ドロップ率
+  let dh = "<tr><th>アイテム・素材</th><th>倍率</th></tr>";
+  ITEMS.forEach(it => {
+    dh += `<tr><td>${it}</td><td><input id="dp_${it}" type="number" step="0.1" min="0" value="${cfg["d."+it] || ""}" placeholder="1.0" style="width:110px" /></td></tr>`;
+  });
+  $("drops").innerHTML = dh;
+
+  // テストコード
+  renderCodes();
+
+  // 武器
+  let html = "<tr><th>武器</th><th>攻撃力</th><th>属性</th><th>属性ダメージ</th></tr>";
   WEAPONS.forEach(w => {
     const v = cfg["atk:" + w];
-    html += `<tr><td>${w}</td><td><input id="atk_${w}" type="number" min="1" step="1" value="${v || ""}" placeholder="既定値" /></td></tr>`;
+    const el = cfg["w." + w + ".elem"] || "無";
+    const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
+    html += `<tr><td>${w}</td>
+      <td><input id="atk_${w}" type="number" min="1" step="1" value="${v || ""}" placeholder="既定値" style="width:100px" /></td>
+      <td><select id="wel_${w}">${opts}</select></td>
+      <td><input id="wbn_${w}" type="number" min="0" step="1" value="${cfg["w."+w+".bonus"] || ""}" placeholder="0" style="width:100px" /></td></tr>`;
   });
   $("weapons").innerHTML = html;
+
+  // スキン
+  let kh = "<tr><th>スキン</th><th>属性</th><th>属性ダメージ</th></tr>";
+  SKINS.forEach(k => {
+    const el = cfg["k." + k + ".elem"] || "無";
+    const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
+    kh += `<tr><td>${k}</td><td><select id="kel_${k}">${opts}</select></td>
+      <td><input id="kbn_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".bonus"] || ""}" placeholder="0" style="width:100px" /></td></tr>`;
+  });
+  $("skins").innerHTML = kh;
+
+  // アイテム情報
+  let ih = "<tr><th>ID</th><th>表示名</th><th>説明</th></tr>";
+  ITEMS.forEach(it => {
+    ih += `<tr><td>${it}</td>
+      <td><input id="in_${it}" value="${esc(cfg["i."+it+".name"] || "")}" placeholder="${it}" style="width:170px" /></td>
+      <td><input id="id_${it}" value="${esc(cfg["i."+it+".desc"] || "")}" placeholder="説明" style="width:280px" /></td></tr>`;
+  });
+  $("itemInfo").innerHTML = ih;
 }
 
 async function put(key, value) {
@@ -253,11 +363,101 @@ async function setDay(i) {
   catch (e) { msg("dayMsg", "保存に失敗：" + e.message, "err"); }
 }
 
+function buildAreaTabs() {
+  $("areaTabs").innerHTML = AREAS.map((a, i) =>
+    `<button class="${i===curArea?'on':''}" onclick="pickArea(${i})">${a}</button>`).join("");
+}
+function pickArea(i) { curArea = i; buildAreaTabs(); loadConfig(); }
+
+async function saveMonsters() {
+  try {
+    for (const m of MONSTERS) {
+      await put("m." + m + ".elem", $("el_" + m).value);
+      const hp = $("hp_" + m).value.trim(), dm = $("dm_" + m).value.trim(), sp = $("sp_" + m).value.trim();
+      if (hp !== "") await put("m." + m + ".hp", hp);
+      if (dm !== "") await put("m." + m + ".dmg", dm);
+      if (sp !== "") await put("m." + m + ".spd", sp);
+    }
+    msg("monMsg", "保存しました", "ok");
+  } catch (e) { msg("monMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveSpawn() {
+  try {
+    for (const m of MONSTERS) {
+      const v = $("sp_" + curArea + "_" + m).value.trim();
+      if (v !== "") await put("s." + curArea + "." + m, v);
+    }
+    msg("spawnMsg", "保存しました（" + AREAS[curArea] + "）", "ok");
+  } catch (e) { msg("spawnMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveDrops() {
+  try {
+    for (const it of ITEMS) {
+      const v = $("dp_" + it).value.trim();
+      if (v !== "") await put("d." + it, v);
+    }
+    msg("dropMsg", "保存しました", "ok");
+  } catch (e) { msg("dropMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveSkins() {
+  try {
+    for (const k of SKINS) {
+      await put("k." + k + ".elem", $("kel_" + k).value);
+      const b = $("kbn_" + k).value.trim();
+      if (b !== "") await put("k." + k + ".bonus", b);
+    }
+    msg("skinMsg", "保存しました", "ok");
+  } catch (e) { msg("skinMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveItemInfo() {
+  try {
+    for (const it of ITEMS) {
+      const n = $("in_" + it).value.trim(), d = $("id_" + it).value.trim();
+      if (n !== "") await put("i." + it + ".name", n);
+      if (d !== "") await put("i." + it + ".desc", d);
+    }
+    msg("itemMsg", "保存しました", "ok");
+  } catch (e) { msg("itemMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+function renderCodes() {
+  const keys = Object.keys(cfg).filter(k => k.startsWith("c."));
+  if (!keys.length) { $("codes").innerHTML = '<div class="msg">まだコードはありません</div>'; return; }
+  $("codes").innerHTML = keys.map(k =>
+    `<div class="report">コード：<b>${esc(k.substring(2))}</b>　${esc(cfg[k] || "")}</div>`).join("");
+}
+
+function makeCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let a = "", b = "";
+  for (let i = 0; i < 4; i++) a += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 4; i++) b += chars[Math.floor(Math.random() * chars.length)];
+  return "TEST-" + a + "-" + b;
+}
+
+async function genCode() {
+  const code = makeCode();
+  const memo = $("testMemo").value.trim();
+  try {
+    await put("c." + code, memo);
+    $("testMemo").value = "";
+    msg("codeMsg", "コードを発行しました：" + code + "（このコードをアプリのマイページで入力）", "ok");
+    renderCodes();
+  } catch (e) { msg("codeMsg", "生成に失敗：" + e.message, "err"); }
+}
+
 async function saveWeapons() {
   try {
     for (const w of WEAPONS) {
       const v = $("atk_" + w).value.trim();
       if (v !== "") await put("atk:" + w, v);
+      await put("w." + w + ".elem", $("wel_" + w).value);
+      const b = $("wbn_" + w).value.trim();
+      if (b !== "") await put("w." + w + ".bonus", b);
     }
     msg("weaponMsg", "保存しました（ゲームに反映されます）", "ok");
   } catch (e) { msg("weaponMsg", "保存に失敗：" + e.message, "err"); }
