@@ -133,14 +133,15 @@ const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼�
 let token = null, uid = null, cfg = {};
 
 // 合言葉（ファイルには「ハッシュ」だけを書いておく）
-const GATE_HASH = 0xd9dbc382;
+const GATE_HASH = 0x229ee848;   // 記号や空白を無視して比較する
 function fnv1a(str) {
   let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   return h >>> 0;
 }
 function checkGate() {
-  const v = $("gateCode").value.trim().toUpperCase();
+  // 大文字小文字・空白・ハイフンを無視して比較
+  const v = $("gateCode").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (fnv1a(v) === GATE_HASH) {
     sessionStorage.setItem("ow_gate", "1");
     $("gateCard").classList.add("hidden");
