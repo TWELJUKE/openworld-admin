@@ -33,6 +33,17 @@
   .hidden { display:none; }
   .report { border-bottom:1px solid var(--line); padding:8px 0; font-size:14px; }
   .report small { color:var(--dim); }
+
+  nav.pages { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  nav.pages button { background:#161620; color:#b9b9c8; border:1px solid #2a2a36; border-radius:8px; padding:10px 16px; font-weight:bold; cursor:pointer; }
+  nav.pages button.on { background:#3a2f14; color:#f5c542; border-color:#f5c542; }
+  .page.hidden { display:none; }
+  .grid-design { display:flex; flex-wrap:wrap; gap:12px; }
+  .design-card { background:#12121a; border:1px solid #2a2a36; border-radius:8px; padding:8px; width:170px; }
+  .design-card canvas { width:154px; height:150px; }
+  table { width:100%; border-collapse:collapse; }
+  table th, table td { border-bottom:1px solid #22222c; padding:6px 8px; text-align:left; font-size:13px; }
+  table input, table select { background:#0e0e14; color:#eee; border:1px solid #2a2a36; border-radius:6px; padding:6px; }
 </style>
 </head>
 <body>
@@ -65,21 +76,30 @@
   </section>
 
   <div id="app" class="hidden">
-    <section class="card">
-      <h2>状況</h2>
-      <div class="row">
-        <div class="stat">登録ユーザー数 <b id="registered">-</b> 人</div>
-        <div class="stat">オンライン <b id="online">-</b> 人</div>
-        <button onclick="loadStats()">更新</button>
-      </div>
-      <div class="msg" id="statMsg"></div>
-    </section>
+    <nav class="pages" id="pageNav"></nav>
 
-    <div class="grid2">
+    <!-- ============ 1ページ目：ユーザー状況・フィールド・運営ウォレット ============ -->
+    <div class="page" id="page1">
       <section class="card">
-        <h2>モンスター</h2>
+        <h2>ユーザー状況</h2>
         <div class="row">
-          <label>出現</label>
+          <div class="stat">登録ユーザー数 <b id="registered">-</b> 人</div>
+          <div class="stat">オンライン <b id="online">-</b> 人</div>
+          <button onclick="loadStats()">更新</button>
+        </div>
+        <div class="msg" id="statMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>フィールド設定</h2>
+        <div class="row">
+          <label>昼夜</label>
+          <button id="day0" onclick="setDay(0)">自動</button>
+          <button id="day1" onclick="setDay(1)">昼固定</button>
+          <button id="day2" onclick="setDay(2)">夜固定</button>
+        </div>
+        <div class="row">
+          <label>モンスターの出現</label>
           <button id="spawnBtn" onclick="toggleSpawn()">-</button>
         </div>
         <div class="row">
@@ -92,115 +112,229 @@
         </div>
         <div class="row"><button class="primary" onclick="saveMonster()">保存</button></div>
         <div class="msg" id="monsterMsg"></div>
+        <div class="sub" style="margin-top:8px">フィールドは2時間ごとに自動リセット（ゲーム内設定）</div>
       </section>
 
       <section class="card">
-        <h2>フィールド</h2>
+        <h2>運営のUSDCウォレット</h2>
         <div class="row">
-          <label>昼夜</label>
-          <button id="day0" onclick="setDay(0)">自動</button>
-          <button id="day1" onclick="setDay(1)">昼固定</button>
-          <button id="day2" onclick="setDay(2)">夜固定</button>
+          <input id="operateWallet" placeholder="0x…（運営のUSDCウォレットアドレス）" style="flex:1;min-width:340px;font-family:monospace" />
+          <button class="primary" onclick="saveOperateWallet()">保存</button>
         </div>
+        <div class="msg" id="walletMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>テストコード（公開前の調整用）</h2>
         <div class="row">
-          <label>フィールドのリセット</label>
-          <span class="sub">2時間ごとに自動（ゲーム内設定）</span>
+          <input id="testMemo" placeholder="用途メモ（例：新武器の当たり判定テスト）" style="flex:1;min-width:240px" />
+          <button class="primary" onclick="genCode()">コードを生成</button>
         </div>
-        <div class="msg" id="dayMsg"></div>
+        <div id="codes"></div>
+        <div class="msg" id="codeMsg"></div>
       </section>
     </div>
 
-    <section class="card">
-      <h2>運営のUSDCウォレット（手数料の受け取り先）</h2>
-      <div class="row">
-        <input id="operateWallet" placeholder="0x…（運営のUSDCウォレットアドレス）" style="flex:1;min-width:340px;font-family:monospace" />
-        <button class="primary" onclick="saveOperateWallet()">保存</button>
-      </div>
-      <div class="msg" id="walletMsg"></div>
-    </section>
+    <!-- ============ 2ページ目：モンスター設定 ============ -->
+    <div class="page hidden" id="page2">
+      <section class="card">
+        <h2>新モンスター登録</h2>
+        <div class="sub" style="margin-bottom:8px">デザインJSON（category: monster）を登録します。</div>
+        <div class="row">
+          <input type="file" id="designFile" accept=".json,application/json" data-cat="monster" />
+          <button class="primary" onclick="uploadDesign('monster')">登録する</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <textarea id="designText" placeholder="または、ここにデザインJSONを貼り付け" style="width:100%;height:110px;font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <div class="row"><button onclick="uploadDesignText('monster')">貼り付けたJSONを登録</button></div>
+        <div id="addedList"></div>
+        <div class="msg" id="designMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>デザイン（ゲーム内の実際の見た目）</h2>
-      <div class="sub" style="margin-bottom:8px">武器・スキン・モンスターの実際のゲーム内デザインです。</div>
-      <div class="row" id="designTabs"></div>
-      <div id="designGrid" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px"></div>
-    </section>
+      <section class="card">
+        <h2>モンスターのデザイン</h2>
+        <div id="monsterGrid" class="grid-design"></div>
+      </section>
 
-    <section class="card">
-      <h2>武器・スキン・モンスターを追加</h2>
-      <div class="sub" style="margin-bottom:8px">デザインJSON（gencode-voxel-v1）を選んで登録すると、全プレイヤーのゲームに反映されます。</div>
-      <div class="row">
-        <input type="file" id="designFile" accept=".json,application/json" />
-        <button class="primary" onclick="uploadDesign()">登録する</button>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <textarea id="designText" placeholder="または、ここにデザインJSONを貼り付け" style="width:100%;height:120px;font-family:monospace;font-size:12px"></textarea>
-      </div>
-      <div class="row"><button onclick="uploadDesignText()">貼り付けたJSONを登録</button></div>
-      <div id="addedList"></div>
-      <div class="msg" id="designMsg"></div>
-    </section>
+      <section class="card">
+        <h2>モンスターごとのステータス設定</h2>
+        <div class="sub" style="margin-bottom:8px">属性：火は木に、木は水に、水は火に、光と闇は互いに強い。数値は倍率（1.0=標準）</div>
+        <table id="monsters"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMonsters()">保存</button></div>
+        <div class="msg" id="monMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>モンスター（種類ごとの設定）</h2>
-      <div class="sub" style="margin-bottom:8px">属性：火は木に、木は水に、水は火に、光と闇は互いに強い</div>
-      <table id="monsters"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMonsters()">保存</button></div>
-      <div class="msg" id="monMsg"></div>
-    </section>
+      <section class="card">
+        <h2>エリアごとの出現テーブル</h2>
+        <div class="row" id="areaTabs"></div>
+        <div class="sub" style="margin-bottom:8px">出現頻度＝出やすさの割合 / 発生頻度＝そのモンスターが実際に現れる確率(%) / MAX個体数＝同時にいる上限（0は無制限）</div>
+        <table id="spawnTable"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSpawn()">保存</button></div>
+        <div class="msg" id="spawnMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>出現テーブル（エリアごとのモンスターと頻度）</h2>
-      <div class="row" id="areaTabs"></div>
-      <div class="sub" style="margin-bottom:8px">頻度 0＝出さない / 30＝標準 / 100＝よく出る（合計に対する割合で抽選されます）</div>
-      <table id="spawnTable"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSpawn()">保存</button></div>
-      <div class="msg" id="spawnMsg"></div>
-    </section>
+      <section class="card">
+        <h2>モンスター削除</h2>
+        <div class="sub" style="margin-bottom:8px">削除すると、そのモンスターは出なくなり、登録したデザインも消えます。</div>
+        <div id="monsterDelete"></div>
+      </section>
+    </div>
 
-    <section class="card">
-      <h2>ドロップ率（アイテム・素材ごと）</h2>
-      <table id="drops"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveDrops()">保存</button></div>
-      <div class="msg" id="dropMsg"></div>
-    </section>
+    <!-- ============ 3ページ目：武器設定 ============ -->
+    <div class="page hidden" id="page3">
+      <section class="card">
+        <h2>新武器追加</h2>
+        <div class="row">
+          <input type="file" id="weaponFile" accept=".json,application/json" />
+          <button class="primary" onclick="uploadDesign('weapon_melee')">登録する</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <textarea id="weaponText" placeholder="または、ここにデザインJSONを貼り付け" style="width:100%;height:110px;font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <div class="row"><button onclick="uploadDesignText('weapon_melee')">貼り付けたJSONを登録</button></div>
+        <div class="msg" id="weaponAddMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>テストコード（公開前の調整用）</h2>
-      <div class="row">
-        <input id="testMemo" placeholder="用途メモ（例：新武器の当たり判定テスト）" style="flex:1;min-width:240px" />
-        <button class="primary" onclick="genCode()">コードを生成</button>
-      </div>
-      <div id="codes"></div>
-      <div class="msg" id="codeMsg"></div>
-    </section>
+      <section class="card">
+        <h2>武器のデザイン</h2>
+        <div id="weaponGrid" class="grid-design"></div>
+      </section>
 
-    <section class="card">
-      <h2>武器の設定（攻撃力・属性・属性ダメージ）</h2>
-      <table id="weapons"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeapons()">保存</button></div>
-      <div class="msg" id="weaponMsg"></div>
-    </section>
+      <section class="card">
+        <h2>武器ごとのパラメータ設定</h2>
+        <table id="weapons"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeapons()">保存</button></div>
+        <div class="msg" id="weaponMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>スキンの設定（属性・属性ダメージ）</h2>
-      <table id="skins"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSkins()">保存</button></div>
-      <div class="msg" id="skinMsg"></div>
-    </section>
+      <section class="card">
+        <h2>武器ごとのクラフト必要素材</h2>
+        <div class="sub" style="margin-bottom:8px">例：フレイムドラゴンの翼:3, フレイムドラゴンの頭:1（素材名:個数をカンマ区切り）</div>
+        <table id="weaponMats"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeaponMats()">保存</button></div>
+        <div class="msg" id="wmatMsg"></div>
+      </section>
 
-    <section class="card">
-      <h2>アイテム・素材の情報</h2>
-      <table id="itemInfo"></table>
-      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveItemInfo()">保存</button></div>
-      <div class="msg" id="itemMsg"></div>
-    </section>
+      <section class="card">
+        <h2>武器削除</h2>
+        <div id="weaponDelete"></div>
+      </section>
+    </div>
 
-    <section class="card">
-      <h2>バグ報告・改善要望</h2>
-      <div class="row"><button onclick="loadReports()">更新</button></div>
-      <div id="reports"></div>
-    </section>
+    <!-- ============ 4ページ目：スキン設定 ============ -->
+    <div class="page hidden" id="page4">
+      <section class="card">
+        <h2>新スキン追加</h2>
+        <div class="row">
+          <input type="file" id="skinFile" accept=".json,application/json" />
+          <button class="primary" onclick="uploadDesign('skin')">登録する</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <textarea id="skinText" placeholder="または、ここにデザインJSONを貼り付け" style="width:100%;height:110px;font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <div class="row"><button onclick="uploadDesignText('skin')">貼り付けたJSONを登録</button></div>
+        <div class="msg" id="skinAddMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>スキンのデザイン</h2>
+        <div id="skinGrid" class="grid-design"></div>
+      </section>
+
+      <section class="card">
+        <h2>スキンごとのパラメータ設定</h2>
+        <table id="skins"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSkins()">保存</button></div>
+        <div class="msg" id="skinMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>スキンごとのクラフト必要素材</h2>
+        <table id="skinMats"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSkinMats()">保存</button></div>
+        <div class="msg" id="kmatMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>スキン削除</h2>
+        <div id="skinDelete"></div>
+      </section>
+    </div>
+
+    <!-- ============ 5ページ目：アイテム設定 ============ -->
+    <div class="page hidden" id="page5">
+      <section class="card">
+        <h2>アイテム追加</h2>
+        <div class="row">
+          <input id="newItemName" placeholder="アイテム名（例：回復薬）" />
+          <button class="primary" onclick="addItemAdmin()">追加</button>
+        </div>
+        <div class="msg" id="itemAddMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>アイテムの出現率</h2>
+        <div class="sub" style="margin-bottom:8px">モンスターが落とす確率の倍率（0=落とさない / 1.0=標準）</div>
+        <table id="drops"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveDrops()">保存</button></div>
+        <div class="msg" id="dropMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>アイテムの情報（表示名・説明）</h2>
+        <table id="itemInfo"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveItemInfo()">保存</button></div>
+        <div class="msg" id="itemMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>アイテム削除</h2>
+        <div id="itemDelete"></div>
+      </section>
+    </div>
+
+    <!-- ============ 6ページ目：素材設定 ============ -->
+    <div class="page hidden" id="page6">
+      <section class="card">
+        <h2>素材追加</h2>
+        <div class="row">
+          <input id="newMatName" placeholder="素材名（例：炎の結晶）" />
+          <button class="primary" onclick="addMatAdmin()">追加</button>
+        </div>
+        <div class="msg" id="matAddMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>どのモンスターからドロップするか</h2>
+        <div class="row" id="dropMatTabs"></div>
+        <div class="sub" style="margin-bottom:8px">選んだモンスターから出る素材と、その確率(%)を決めます。</div>
+        <table id="matDropTable"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMatDrop()">保存</button></div>
+        <div class="msg" id="matDropMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>素材の出現率</h2>
+        <table id="matRate"></table>
+        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMatRate()">保存</button></div>
+        <div class="msg" id="matRateMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>素材削除</h2>
+        <div id="matDelete"></div>
+      </section>
+    </div>
+
+    <!-- ============ 7ページ目：バグ報告 ============ -->
+    <div class="page hidden" id="page7">
+      <section class="card">
+        <h2>バグ報告・改善要望</h2>
+        <div class="row"><button onclick="loadReports()">更新</button></div>
+        <div id="reports"></div>
+      </section>
+    </div>
   </div>
 </main>
 
@@ -286,7 +420,21 @@ async function login() {
 function logout() { location.reload(); }
 
 let curArea = 0;
-async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); buildAreaTabs(); drawDesignTabs(); renderDesigns(); renderAdded(); }
+const PAGES = ["ユーザー状況","モンスター設定","武器設定","スキン設定","アイテム設定","素材設定","バグ報告"];
+let page = 0;
+function buildPages() {
+  $("pageNav").innerHTML = PAGES.map((t, i) =>
+    `<button class="${i===page?'on':''}" onclick="pickPage(${i})">${i+1}. ${t}</button>`).join("");
+}
+function pickPage(i) {
+  page = i; buildPages();
+  for (let k = 0; k < PAGES.length; k++) {
+    const el = $("page" + (k + 1));
+    if (el) el.className = (k === i ? "page" : "page hidden");
+  }
+}
+
+async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); buildPages(); pickPage(page); buildAreaTabs(); drawDropMatTabs(); renderAll(); }
 
 async function loadConfig() {
   const res = await api("/rest/v1/config?select=key,value");
@@ -530,40 +678,62 @@ function allDesigns() {
   });
   return list;
 }
-function drawDesignTabs() {
-  const tabs = [["monster","モンスター"],["weapon_melee","武器（近接）"],["weapon_ranged","武器（遠距離）"],["skin","スキン"]];
-  $("designTabs").innerHTML = tabs.map(t =>
-    `<button class="${designTab===t[0]?'on':''}" onclick="pickDesign('${t[0]}')">${t[1]}</button>`).join("");
-}
-function pickDesign(t) { designTab = t; drawDesignTabs(); renderDesigns(); }
-function renderDesigns() {
-  const list = allDesigns().filter(d => designTab === "weapon_ranged"
-      ? d.category === "weapon_ranged"
-      : (designTab === "weapon_melee" ? (d.category === "weapon_melee" || d.category === "weapon") : d.category === designTab));
-  if (designTab === "skin") { renderSkins(); return; }
-  if (!list.length) { $("designGrid").innerHTML = '<div class="msg">まだありません</div>'; return; }
-  $("designGrid").innerHTML = list.map((d, i) => {
-    const id = "cv" + i;
+// 種類ごとにデザインを描く
+function designGrid(elId, cats, skinColors) {
+  const el = $(elId); if (!el) return;
+  const list = allDesigns().filter(d => cats.includes(d.category));
+  if (elId === "skinGrid") {
+    el.innerHTML = SKINS.map((name, i) => {
+      const cfgc = ["#ECEFF4","#D9483D","#4779D9","#4CB861","#E6C43F","#38383F","#E64D1E"][i];
+      const id = "sk" + i;
+      setTimeout(() => drawSkin($(id), cfgc), 0);
+      return `<div class="design-card"><canvas id="${id}" width="154" height="150"></canvas>
+        <div style="font-weight:bold;margin-top:6px">${esc(name)}</div>
+        <div class="sub">${esc(defaultSkinRare(name))} レア</div></div>`;
+    }).join("");
+    return;
+  }
+  if (!list.length) { el.innerHTML = '<div class="msg">まだありません</div>'; return; }
+  el.innerHTML = list.map((d, i) => {
+    const id = elId + "_cv" + i;
     setTimeout(() => drawVoxel($(id), d), 0);
-    return `<div style="background:#12121a;border:1px solid #2a2a36;border-radius:8px;padding:8px;width:170px">
-      <canvas id="${id}" width="154" height="150" style="width:154px;height:150px"></canvas>
+    return `<div class="design-card"><canvas id="${id}" width="154" height="150"></canvas>
       <div style="font-weight:bold;margin-top:6px">${esc(d.name)}</div>
-      <div class="sub">${esc(d.category || "")}</div>
-    </div>`;
+      <div class="sub">${esc(d.category || "")}</div></div>`;
   }).join("");
 }
-function renderSkins() {
-  $("designGrid").innerHTML = SKINS.map((name, i) => {
-    const cfgc = ["#ECEFF4","#D9483D","#4779D9","#4CB861","#E6C43F","#38383F","#E64D1E"][i];
-    const id = "sk" + i;
-    setTimeout(() => drawSkin($(id), cfgc), 0);
-    return `<div style="background:#12121a;border:1px solid #2a2a36;border-radius:8px;padding:8px;width:170px">
-      <canvas id="${id}" width="154" height="150" style="width:154px;height:150px"></canvas>
-      <div style="font-weight:bold;margin-top:6px">${esc(name)}</div>
-      <div class="sub">${esc(defaultSkinRare(name))} レア</div>
-    </div>`;
-  }).join("");
+
+function renderDesigns() {
+  designGrid("monsterGrid", ["monster"]);
+  designGrid("weaponGrid", ["weapon_melee", "weapon", "weapon_ranged"]);
+  designGrid("skinGrid", ["skin"]);
 }
+
+// 削除ボタンの一覧
+function deleteList(elId, items, kind) {
+  const el = $(elId); if (!el) return;
+  if (!items.length) { el.innerHTML = '<div class="msg">項目がありません</div>'; return; }
+  el.innerHTML = items.map(n =>
+    `<div class="report"><b>${esc(n)}</b>　<button onclick="deleteEntry('${kind}','${esc(n)}')">削除</button></div>`).join("");
+}
+function deleteEntry(kind, name) {
+  if (!confirm(name + " を削除しますか？")) return;
+  put("del." + kind + "." + name, "1").then(() => { loadConfig(); }).catch(e => alert("失敗: " + e.message));
+}
+
+function renderDeleteLists() {
+  const mobs = designNames("monster");
+  deleteList("monsterDelete", mobs, "monster");
+  deleteList("weaponDelete", designNames(["weapon_melee","weapon","weapon_ranged"]), "weapon");
+  deleteList("skinDelete", SKINS, "skin");
+  deleteList("itemDelete", itemList(), "item");
+  deleteList("matDelete", matList(), "mat");
+}
+function designNames(cats) {
+  if (typeof cats === "string") cats = [cats];
+  return allDesigns().filter(d => cats.includes(d.category)).map(d => d.name);
+}
+
 function drawSkin(cv, col) {
   if (!cv) return;
   const g = cv.getContext("2d");
@@ -621,32 +791,55 @@ function drawVoxel(cv, d) {
   });
 }
 
-async function uploadDesign() {
-  const f = $("designFile").files[0];
-  if (!f) { msg("designMsg", "ファイルを選んでください", "err"); return; }
-  const text = await f.text();
-  await registerDesign(text);
+function inputIds(cat) {
+  if (cat === "monster") return ["designFile", "designText", "designMsg"];
+  if (cat === "skin") return ["skinFile", "skinText", "skinAddMsg"];
+  return ["weaponFile", "weaponText", "weaponAddMsg"];
 }
-async function uploadDesignText() {
-  await registerDesign($("designText").value.trim());
+async function uploadDesign(cat) {
+  const [fileId, , msgId] = inputIds(cat || "monster");
+  const f = $(fileId).files[0];
+  if (!f) { msg(msgId, "ファイルを選んでください", "err"); return; }
+  await registerDesign(await f.text(), cat, msgId);
 }
-async function registerDesign(text) {
+async function uploadDesignText(cat) {
+  const [, textId, msgId] = inputIds(cat || "monster");
+  await registerDesign($(textId).value.trim(), cat, msgId);
+}
+async function registerDesign(text, cat, msgId) {
   let d;
-  try { d = JSON.parse(text); } catch (e) { msg("designMsg", "JSONの形式が正しくありません", "err"); return; }
-  if (!d || !d.name || !d.voxels) { msg("designMsg", "name / voxels が必要です", "err"); return; }
+  try { d = JSON.parse(text); } catch (e) { msg(msgId, "JSONの形式が正しくありません", "err"); return; }
+  if (!d || !d.name || !d.voxels) { msg(msgId, "name / voxels が必要です", "err"); return; }
+  if (cat && !d.category) d.category = cat;
   try {
-    await put("design." + d.name, text);
-    msg("designMsg", "「" + d.name + "」を登録しました（ゲームを再起動すると反映されます）", "ok");
-    $("designText").value = "";
-    renderAdded();
-    renderDesigns();
-  } catch (e) { msg("designMsg", "登録に失敗：" + e.message, "err"); }
+    await put("design." + d.name, JSON.stringify(d));
+    msg(msgId, "「" + d.name + "」を登録しました（ゲームを再起動すると反映されます）", "ok");
+    const [, textId] = inputIds(cat || "monster");
+    $(textId).value = "";
+    await loadConfig();
+  } catch (e) { msg(msgId, "登録に失敗：" + e.message, "err"); }
 }
 function renderAdded() {
   const keys = Object.keys(cfg).filter(k => k.startsWith("design."));
-  if (!keys.length) { $("addedList").innerHTML = ""; return; }
-  $("addedList").innerHTML = '<div class="sub" style="margin-top:8px">登録済み（事務局から追加）：</div>' +
+  const el = $("addedList");
+  if (!el) return;
+  if (!keys.length) { el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="sub" style="margin-top:8px">登録済み（事務局から追加）：</div>' +
     keys.map(k => `<div class="report"><b>${esc(k.substring(7))}</b>　<button onclick="removeDesign('${esc(k)}')">削除</button></div>`).join("");
+}
+function renderAll() {
+  renderDesigns();
+  renderAdded();
+  renderDeleteLists();
+  renderMatDropTable();
+  renderMatRate();
+}
+function itemList() { return ITEMS.concat(Object.keys(cfg).filter(k => k.startsWith("item.add.")).map(k => k.substring(9))); }
+function matList() {
+  const base = ["フレイムドラゴンの翼","フレイムドラゴンの頭","皮","鉱石","ダークの証"];
+  const added = Object.keys(cfg).filter(k => k.startsWith("mat.add.")).map(k => k.substring(8));
+  const fromDrop = Object.keys(cfg).filter(k => k.startsWith("md.")).map(k => k.split(".")[2]);
+  return Array.from(new Set(base.concat(added).concat(fromDrop)));
 }
 async function removeDesign(key) {
   try {
@@ -655,6 +848,99 @@ async function removeDesign(key) {
     renderAdded(); renderDesigns();
     msg("designMsg", "削除しました", "ok");
   } catch (e) { msg("designMsg", "削除に失敗：" + e.message, "err"); }
+}
+
+
+// ---------- 武器・スキンのクラフト素材 ----------
+function matRows(elId, names, prefix, saveFn) {
+  const el = $(elId); if (!el) return;
+  let h = "<tr><th>名前</th><th>必要素材（素材名:個数,素材名:個数）</th></tr>";
+  names.forEach(n => {
+    h += `<tr><td>${esc(n)}</td><td><input id="${prefix}_${n}" value="${esc(cfg[prefix + "." + n] || "")}" placeholder="例：フレイムドラゴンの翼:3, フレイムドラゴンの頭:1" style="width:420px" /></td></tr>`;
+  });
+  el.innerHTML = h;
+}
+async function saveMatsFrom(elId, names, prefix, msgId) {
+  try {
+    for (const n of names) {
+      const v = $(prefix + "_" + n).value.trim();
+      if (v !== "") await put(prefix + "." + n, v);
+    }
+    msg(msgId, "保存しました", "ok");
+  } catch (e) { msg(msgId, "保存に失敗：" + e.message, "err"); }
+}
+function weaponNameList() {
+  return WEAPONS.concat(designNames(["weapon_melee", "weapon", "weapon_ranged"])).filter((v, i, a) => a.indexOf(v) === i);
+}
+function renderWeaponMats() { matRows("weaponMats", weaponNameList(), "wm"); }
+async function saveWeaponMats() { await saveMatsFrom("weaponMats", weaponNameList(), "wm", "wmatMsg"); }
+function renderSkinMats() { matRows("skinMats", SKINS, "km"); }
+async function saveSkinMats() { await saveMatsFrom("skinMats", SKINS, "km", "kmatMsg"); }
+
+// ---------- アイテム・素材の追加 ----------
+async function addItemAdmin() {
+  const n = $("newItemName").value.trim();
+  if (!n) { msg("itemAddMsg", "名前を入れてください", "err"); return; }
+  try { await put("item.add." + n, n); $("newItemName").value = ""; await loadConfig(); msg("itemAddMsg", "「" + n + "」を追加しました", "ok"); }
+  catch (e) { msg("itemAddMsg", "失敗：" + e.message, "err"); }
+}
+async function addMatAdmin() {
+  const n = $("newMatName").value.trim();
+  if (!n) { msg("matAddMsg", "名前を入れてください", "err"); return; }
+  try { await put("mat.add." + n, n); $("newMatName").value = ""; await loadConfig(); msg("matAddMsg", "「" + n + "」を追加しました", "ok"); }
+  catch (e) { msg("matAddMsg", "失敗：" + e.message, "err"); }
+}
+
+// ---------- 素材のドロップ元 ----------
+let dropMatMonster = "";
+function drawDropMatTabs() {
+  const el = $("dropMatTabs"); if (!el) return;
+  const list = designNames("monster");
+  const names = list.length ? list : MONSTERS;
+  if (!dropMatMonster) dropMatMonster = names[0] || "";
+  el.innerHTML = names.map(n =>
+    `<button class="${dropMatMonster===n?'on':''}" onclick="pickDropMatMonster('${esc(n)}')">${esc(n)}</button>`).join("");
+}
+function pickDropMatMonster(n) { dropMatMonster = n; drawDropMatTabs(); renderMatDropTable(); }
+function renderMatDropTable() {
+  const el = $("matDropTable"); if (!el) return;
+  const mats = matList();
+  let h = "<tr><th>素材</th><th>このモンスターから出る確率(%)</th></tr>";
+  mats.forEach(m => {
+    const key = "md." + dropMatMonster + "." + m;
+    h += `<tr><td>${esc(m)}</td><td><input id="md_${m}" type="number" min="0" max="100" value="${cfg[key] === undefined ? "" : cfg[key]}" placeholder="0" style="width:100px" /></td></tr>`;
+  });
+  el.innerHTML = h;
+}
+async function saveMatDrop() {
+  if (!dropMatMonster) return;
+  try {
+    for (const m of matList()) {
+      const v = $("md_" + m).value.trim();
+      if (v !== "") await put("md." + dropMatMonster + "." + m, v);
+    }
+    msg("matDropMsg", "保存しました（" + dropMatMonster + "）", "ok");
+  } catch (e) { msg("matDropMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+// ---------- 素材の出現率 ----------
+function renderMatRate() {
+  const el = $("matRate"); if (!el) return;
+  const mats = matList();
+  let h = "<tr><th>素材</th><th>倍率（0=出さない / 1.0=標準）</th></tr>";
+  mats.forEach(m => {
+    h += `<tr><td>${esc(m)}</td><td><input id="mr_${m}" type="number" step="0.1" min="0" value="${cfg["d." + m] || ""}" placeholder="1.0" style="width:110px" /></td></tr>`;
+  });
+  el.innerHTML = h;
+}
+async function saveMatRate() {
+  try {
+    for (const m of matList()) {
+      const v = $("mr_" + m).value.trim();
+      if (v !== "") await put("d." + m, v);
+    }
+    msg("matRateMsg", "保存しました", "ok");
+  } catch (e) { msg("matRateMsg", "保存に失敗：" + e.message, "err"); }
 }
 
 async function saveWeapons() {
