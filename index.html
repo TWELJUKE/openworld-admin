@@ -597,12 +597,22 @@ function drawVoxel(cv, d) {
     minZ = Math.min(minZ, v[2]); maxZ = Math.max(maxZ, v[2]);
   });
   const w = maxX - minX + 1, h = maxY - minY + 1, dp = maxZ - minZ + 1;
-  const scale = Math.min(cv.width / (w + dp) * 0.92, cv.height / (h + (w + dp) * 0.5) * 0.98);
-  const ox = cv.width / 2, oy = cv.height * 0.92;
+  // まず scale=1 で投影して大きさを測り、キャンバスに収まるよう自動調整する
+  function projUnit(x, y, z) { return [(x - z), -(y + (x + z) * 0.5)]; }
+  let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+  d.voxels.forEach(v => {
+    const p = projUnit(v[0] - minX, v[1] - minY, v[2] - minZ);
+    bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]);
+    by0 = Math.min(by0, p[1]); by1 = Math.max(by1, p[1]);
+  });
+  const bw = Math.max(1, bx1 - bx0), bh = Math.max(1, by1 - by0);
+  const scale = Math.min(cv.width / bw, cv.height / bh) * 0.86;
+  const cx = cv.width / 2 - (bx0 + bx1) / 2 * scale;
+  const cy = cv.height / 2 - (by0 + by1) / 2 * scale;
   function proj(x, y, z) {
-    return [ox + (x - z) * scale, oy - (y * scale + (x + z) * scale * 0.5)];
+    const p = projUnit(x, y, z);
+    return [cx + p[0] * scale, cy + p[1] * scale];
   }
-  const sorted = d.voxels.slice().sort((a, b) => (a[0] + a[2] + a[1] * 0.001) - (b[0] + b[2] + b[1] * 0.001));
   sorted.forEach(v => {
     const p = proj(v[0] - minX, v[1] - minY, v[2] - minZ);
     const c = pal[v[3]] || "#aaaaaa";
