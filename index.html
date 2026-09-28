@@ -111,6 +111,37 @@
     </div>
 
     <section class="card">
+      <h2>運営のUSDCウォレット（手数料の受け取り先）</h2>
+      <div class="row">
+        <input id="operateWallet" placeholder="0x…（運営のUSDCウォレットアドレス）" style="flex:1;min-width:340px;font-family:monospace" />
+        <button class="primary" onclick="saveOperateWallet()">保存</button>
+      </div>
+      <div class="msg" id="walletMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>デザイン（ゲーム内の実際の見た目）</h2>
+      <div class="sub" style="margin-bottom:8px">武器・スキン・モンスターの実際のゲーム内デザインです。</div>
+      <div class="row" id="designTabs"></div>
+      <div id="designGrid" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px"></div>
+    </section>
+
+    <section class="card">
+      <h2>武器・スキン・モンスターを追加</h2>
+      <div class="sub" style="margin-bottom:8px">デザインJSON（gencode-voxel-v1）を選んで登録すると、全プレイヤーのゲームに反映されます。</div>
+      <div class="row">
+        <input type="file" id="designFile" accept=".json,application/json" />
+        <button class="primary" onclick="uploadDesign()">登録する</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <textarea id="designText" placeholder="または、ここにデザインJSONを貼り付け" style="width:100%;height:120px;font-family:monospace;font-size:12px"></textarea>
+      </div>
+      <div class="row"><button onclick="uploadDesignText()">貼り付けたJSONを登録</button></div>
+      <div id="addedList"></div>
+      <div class="msg" id="designMsg"></div>
+    </section>
+
+    <section class="card">
       <h2>モンスター（種類ごとの設定）</h2>
       <div class="sub" style="margin-bottom:8px">属性：火は木に、木は水に、水は火に、光と闇は互いに強い</div>
       <table id="monsters"></table>
@@ -173,6 +204,7 @@
   </div>
 </main>
 
+<script src="designs.js"></script>
 <script>
 const SUPABASE_URL = "https://eoundtxbupxbrfccejlk.supabase.co";
 const ANON_KEY = "sb_publishable_uFZkixZQjcm7E3ZohcLw4Q_MktOtmn2";
@@ -254,7 +286,7 @@ async function login() {
 function logout() { location.reload(); }
 
 let curArea = 0;
-async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); buildAreaTabs(); }
+async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); buildAreaTabs(); drawDesignTabs(); renderDesigns(); renderAdded(); }
 
 async function loadConfig() {
   const res = await api("/rest/v1/config?select=key,value");
@@ -302,7 +334,7 @@ async function loadConfig() {
   renderCodes();
 
   // 武器
-  let html = "<tr><th>武器</th><th>攻撃力</th><th>属性</th><th>属性ダメージ</th></tr>";
+  let html = "<tr><th>武器</th><th>攻撃力</th><th>属性</th><th>属性ダメージ</th><th>レア度</th></tr>";
   WEAPONS.forEach(w => {
     const v = cfg["atk:" + w];
     const el = cfg["w." + w + ".elem"] || "無";
@@ -310,19 +342,29 @@ async function loadConfig() {
     html += `<tr><td>${w}</td>
       <td><input id="atk_${w}" type="number" min="1" step="1" value="${v || ""}" placeholder="既定値" style="width:100px" /></td>
       <td><select id="wel_${w}">${opts}</select></td>
-      <td><input id="wbn_${w}" type="number" min="0" step="1" value="${cfg["w."+w+".bonus"] || ""}" placeholder="0" style="width:100px" /></td></tr>`;
+      <td><input id="wbn_${w}" type="number" min="0" step="1" value="${cfg["w."+w+".bonus"] || ""}" placeholder="0" style="width:100px" /></td>
+      <td><select id="wra_${w}">${rareOpts(cfg["w."+w+".rare"] || defaultWeaponRare(w))}</select></td></tr>`;
   });
   $("weapons").innerHTML = html;
 
-  // スキン
-  let kh = "<tr><th>スキン</th><th>属性</th><th>属性ダメージ</th></tr>";
+  // スキン（属性・属性ダメージ・体力・属性防御・レア度）
+  let kh = "<tr><th>スキン</th><th>属性</th><th>属性ダメージ</th><th>体力</th><th>属性防御</th><th>軽減量</th><th>レア度</th></tr>";
   SKINS.forEach(k => {
     const el = cfg["k." + k + ".elem"] || "無";
+    const de = cfg["k." + k + ".defelem"] || "無";
     const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
-    kh += `<tr><td>${k}</td><td><select id="kel_${k}">${opts}</select></td>
-      <td><input id="kbn_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".bonus"] || ""}" placeholder="0" style="width:100px" /></td></tr>`;
+    const dopts = ELEMS.map(e => `<option value="${e}" ${e===de?"selected":""}>${e}</option>`).join("");
+    kh += `<tr><td>${k}</td>
+      <td><select id="kel_${k}">${opts}</select></td>
+      <td><input id="kbn_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".bonus"] || ""}" placeholder="0" style="width:80px" /></td>
+      <td><input id="khp_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".hp"] || ""}" placeholder="0" style="width:80px" /></td>
+      <td><select id="kde_${k}">${dopts}</select></td>
+      <td><input id="kdf_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".def"] || ""}" placeholder="0" style="width:80px" /></td>
+      <td><select id="kra_${k}">${rareOpts(cfg["k."+k+".rare"] || defaultSkinRare(k))}</select></td></tr>`;
   });
   $("skins").innerHTML = kh;
+
+  if ($("operateWallet")) $("operateWallet").value = cfg["operateWallet"] || "";
 
   // アイテム情報
   let ih = "<tr><th>ID</th><th>表示名</th><th>説明</th></tr>";
@@ -406,8 +448,14 @@ async function saveSkins() {
   try {
     for (const k of SKINS) {
       await put("k." + k + ".elem", $("kel_" + k).value);
+      await put("k." + k + ".defelem", $("kde_" + k).value);
+      await put("k." + k + ".rare", $("kra_" + k).value);
       const b = $("kbn_" + k).value.trim();
       if (b !== "") await put("k." + k + ".bonus", b);
+      const hp = $("khp_" + k).value.trim();
+      if (hp !== "") await put("k." + k + ".hp", hp);
+      const df = $("kdf_" + k).value.trim();
+      if (df !== "") await put("k." + k + ".def", df);
     }
     msg("skinMsg", "保存しました", "ok");
   } catch (e) { msg("skinMsg", "保存に失敗：" + e.message, "err"); }
@@ -450,12 +498,162 @@ async function genCode() {
   } catch (e) { msg("codeMsg", "生成に失敗：" + e.message, "err"); }
 }
 
+function rareOpts(sel) {
+  return ["B","A","S","SS"].map(r => `<option value="${r}" ${r===sel?"selected":""}>${r}</option>`).join("");
+}
+function defaultWeaponRare(w) {
+  if (["紅竜戦斧","翠竜剣"].includes(w)) return "SS";
+  if (["フレイムソード","宝石の刃剣","氷竜剣"].includes(w)) return "S";
+  if (["火星の弓","鋼の槍","鉄の剣"].includes(w)) return "A";
+  return "B";
+}
+function defaultSkinRare(k) {
+  if (k === "フレイムドラゴン") return "SS";
+  if (k === "黒") return "S";
+  if (k === "金") return "A";
+  return "B";
+}
+
+async function saveOperateWallet() {
+  try {
+    await put("operateWallet", $("operateWallet").value.trim());
+    msg("walletMsg", "保存しました（ゲームの手数料の受け取り先になります）", "ok");
+  } catch (e) { msg("walletMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+// ---------- デザイン表示（ボクセルのアイソメ描画） ----------
+let designTab = "monster";
+function allDesigns() {
+  const list = (typeof DESIGNS !== "undefined") ? DESIGNS.slice() : [];
+  Object.keys(cfg).filter(k => k.startsWith("design.")).forEach(k => {
+    try { list.push(JSON.parse(cfg[k])); } catch (e) {}
+  });
+  return list;
+}
+function drawDesignTabs() {
+  const tabs = [["monster","モンスター"],["weapon_melee","武器（近接）"],["weapon_ranged","武器（遠距離）"],["skin","スキン"]];
+  $("designTabs").innerHTML = tabs.map(t =>
+    `<button class="${designTab===t[0]?'on':''}" onclick="pickDesign('${t[0]}')">${t[1]}</button>`).join("");
+}
+function pickDesign(t) { designTab = t; drawDesignTabs(); renderDesigns(); }
+function renderDesigns() {
+  const list = allDesigns().filter(d => designTab === "weapon_ranged"
+      ? d.category === "weapon_ranged"
+      : (designTab === "weapon_melee" ? (d.category === "weapon_melee" || d.category === "weapon") : d.category === designTab));
+  if (designTab === "skin") { renderSkins(); return; }
+  if (!list.length) { $("designGrid").innerHTML = '<div class="msg">まだありません</div>'; return; }
+  $("designGrid").innerHTML = list.map((d, i) => {
+    const id = "cv" + i;
+    setTimeout(() => drawVoxel($(id), d), 0);
+    return `<div style="background:#12121a;border:1px solid #2a2a36;border-radius:8px;padding:8px;width:170px">
+      <canvas id="${id}" width="154" height="150" style="width:154px;height:150px"></canvas>
+      <div style="font-weight:bold;margin-top:6px">${esc(d.name)}</div>
+      <div class="sub">${esc(d.category || "")}</div>
+    </div>`;
+  }).join("");
+}
+function renderSkins() {
+  $("designGrid").innerHTML = SKINS.map((name, i) => {
+    const cfgc = ["#ECEFF4","#D9483D","#4779D9","#4CB861","#E6C43F","#38383F","#E64D1E"][i];
+    const id = "sk" + i;
+    setTimeout(() => drawSkin($(id), cfgc), 0);
+    return `<div style="background:#12121a;border:1px solid #2a2a36;border-radius:8px;padding:8px;width:170px">
+      <canvas id="${id}" width="154" height="150" style="width:154px;height:150px"></canvas>
+      <div style="font-weight:bold;margin-top:6px">${esc(name)}</div>
+      <div class="sub">${esc(defaultSkinRare(name))} レア</div>
+    </div>`;
+  }).join("");
+}
+function drawSkin(cv, col) {
+  if (!cv) return;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  const s = 16, ox = (cv.width - 4 * s) / 2, oy = (cv.height - 6 * s) / 2;
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 4; x++) {
+    let c = col;
+    if (y >= 5) c = col;
+    else if (y === 4) c = "#1a2440";
+    else if (y < 2) c = shade(col, 0.75);
+    g.fillStyle = c;
+    g.fillRect(ox + x * s, oy + (5 - y) * s, s - 1, s - 1);
+  }
+}
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * k), g = Math.round(((n >> 8) & 255) * k), b = Math.round((n & 255) * k);
+  return `rgb(${r},${g},${b})`;
+}
+function drawVoxel(cv, d) {
+  if (!cv || !d || !d.voxels) return;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  const pal = {};
+  (d.palette || []).forEach(p => pal[p.id] = p.hex);
+  const sz = d.size || [16, 16, 16];
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9, minZ = 1e9, maxZ = -1e9;
+  d.voxels.forEach(v => {
+    minX = Math.min(minX, v[0]); maxX = Math.max(maxX, v[0]);
+    minY = Math.min(minY, v[1]); maxY = Math.max(maxY, v[1]);
+    minZ = Math.min(minZ, v[2]); maxZ = Math.max(maxZ, v[2]);
+  });
+  const w = maxX - minX + 1, h = maxY - minY + 1, dp = maxZ - minZ + 1;
+  const scale = Math.min(cv.width / (w + dp) * 0.92, cv.height / (h + (w + dp) * 0.5) * 0.98);
+  const ox = cv.width / 2, oy = cv.height * 0.92;
+  function proj(x, y, z) {
+    return [ox + (x - z) * scale, oy - (y * scale + (x + z) * scale * 0.5)];
+  }
+  const sorted = d.voxels.slice().sort((a, b) => (a[0] + a[2] + a[1] * 0.001) - (b[0] + b[2] + b[1] * 0.001));
+  sorted.forEach(v => {
+    const p = proj(v[0] - minX, v[1] - minY, v[2] - minZ);
+    const c = pal[v[3]] || "#aaaaaa";
+    g.fillStyle = c;
+    g.fillRect(p[0] - scale * 0.5, p[1] - scale * 0.5, scale * 1.02, scale * 1.02);
+  });
+}
+
+async function uploadDesign() {
+  const f = $("designFile").files[0];
+  if (!f) { msg("designMsg", "ファイルを選んでください", "err"); return; }
+  const text = await f.text();
+  await registerDesign(text);
+}
+async function uploadDesignText() {
+  await registerDesign($("designText").value.trim());
+}
+async function registerDesign(text) {
+  let d;
+  try { d = JSON.parse(text); } catch (e) { msg("designMsg", "JSONの形式が正しくありません", "err"); return; }
+  if (!d || !d.name || !d.voxels) { msg("designMsg", "name / voxels が必要です", "err"); return; }
+  try {
+    await put("design." + d.name, text);
+    msg("designMsg", "「" + d.name + "」を登録しました（ゲームを再起動すると反映されます）", "ok");
+    $("designText").value = "";
+    renderAdded();
+    renderDesigns();
+  } catch (e) { msg("designMsg", "登録に失敗：" + e.message, "err"); }
+}
+function renderAdded() {
+  const keys = Object.keys(cfg).filter(k => k.startsWith("design."));
+  if (!keys.length) { $("addedList").innerHTML = ""; return; }
+  $("addedList").innerHTML = '<div class="sub" style="margin-top:8px">登録済み（事務局から追加）：</div>' +
+    keys.map(k => `<div class="report"><b>${esc(k.substring(7))}</b>　<button onclick="removeDesign('${esc(k)}')">削除</button></div>`).join("");
+}
+async function removeDesign(key) {
+  try {
+    await fetch(SUPA_URL + "/rest/v1/config?key=eq." + encodeURIComponent(key), { method: "DELETE", headers: headers() });
+    await loadConfig();
+    renderAdded(); renderDesigns();
+    msg("designMsg", "削除しました", "ok");
+  } catch (e) { msg("designMsg", "削除に失敗：" + e.message, "err"); }
+}
+
 async function saveWeapons() {
   try {
     for (const w of WEAPONS) {
       const v = $("atk_" + w).value.trim();
       if (v !== "") await put("atk:" + w, v);
       await put("w." + w + ".elem", $("wel_" + w).value);
+      await put("w." + w + ".rare", $("wra_" + w).value);
       const b = $("wbn_" + w).value.trim();
       if (b !== "") await put("w." + w + ".bonus", b);
     }
