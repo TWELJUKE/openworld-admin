@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPEN WORLD 運営事務局</title>
+<style>
+  :root { --bg:#0d0f16; --panel:#151827; --line:#2a2f45; --text:#e8e8f0; --dim:#9aa0b4; --gold:#f5c542; --green:#3fbf6a; --red:#c9483f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif; }
+  header { padding:18px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:22px; margin:0; letter-spacing:.08em; }
+  .sub { color:var(--dim); font-size:13px; }
+  main { padding:20px; max-width:1200px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:16px; }
+  .card h2 { font-size:16px; margin:0 0 12px; color:var(--gold); letter-spacing:.04em; }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .stat { font-size:15px; }
+  .stat b { font-size:26px; color:var(--gold); }
+  button { background:#2b3350; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  button:hover { background:#38425f; }
+  button.primary { background:var(--green); border-color:var(--green); color:#08210f; font-weight:700; }
+  button.danger { background:var(--red); border-color:var(--red); color:#fff; }
+  button.on { background:var(--gold); border-color:var(--gold); color:#241c00; font-weight:700; }
+  input, select { background:#0f1220; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 11px; font-size:14px; min-width:120px; }
+  table { width:100%; border-collapse:collapse; }
+  td, th { padding:8px 6px; border-bottom:1px solid var(--line); font-size:14px; text-align:left; }
+  th { color:var(--dim); font-weight:600; }
+  .msg { color:var(--dim); font-size:13px; min-height:18px; }
+  .ok { color:var(--green); } .err { color:var(--red); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:860px){ .grid2{ grid-template-columns:1fr; } }
+  .hidden { display:none; }
+  .report { border-bottom:1px solid var(--line); padding:8px 0; font-size:14px; }
+  .report small { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OPEN WORLD 運営事務局</h1>
+  <span class="sub" id="who"></span>
+  <button class="hidden" id="logout" onclick="logout()">ログアウト</button>
+</header>
+
+<main>
+  <!-- ログイン -->
+  <section class="card" id="loginCard">
+    <h2>運営スタッフのログイン</h2>
+    <div class="row">
+      <input id="email" type="email" placeholder="メールアドレス" autocomplete="username" />
+      <input id="pass" type="password" placeholder="パスワード" autocomplete="current-password" />
+      <button class="primary" onclick="login()">ログイン</button>
+    </div>
+    <div class="msg" id="loginMsg">スタッフ登録されたアカウントでログインしてください。</div>
+  </section>
+
+  <div id="app" class="hidden">
+    <section class="card">
+      <h2>状況</h2>
+      <div class="row">
+        <div class="stat">登録ユーザー数 <b id="registered">-</b> 人</div>
+        <div class="stat">オンライン <b id="online">-</b> 人</div>
+        <button onclick="loadStats()">更新</button>
+      </div>
+      <div class="msg" id="statMsg"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>モンスター</h2>
+        <div class="row">
+          <label>出現</label>
+          <button id="spawnBtn" onclick="toggleSpawn()">-</button>
+        </div>
+        <div class="row">
+          <label>強さの倍率</label>
+          <input id="monsterMul" type="number" step="0.1" min="0" max="10" value="1" />
+        </div>
+        <div class="row">
+          <label>ドロップ率の倍率</label>
+          <input id="dropMul" type="number" step="0.1" min="0" max="10" value="1" />
+        </div>
+        <div class="row"><button class="primary" onclick="saveMonster()">保存</button></div>
+        <div class="msg" id="monsterMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>フィールド</h2>
+        <div class="row">
+          <label>昼夜</label>
+          <button id="day0" onclick="setDay(0)">自動</button>
+          <button id="day1" onclick="setDay(1)">昼固定</button>
+          <button id="day2" onclick="setDay(2)">夜固定</button>
+        </div>
+        <div class="row">
+          <label>フィールドのリセット</label>
+          <span class="sub">2時間ごとに自動（ゲーム内設定）</span>
+        </div>
+        <div class="msg" id="dayMsg"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>武器の攻撃力</h2>
+      <table id="weapons"></table>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeapons()">保存</button></div>
+      <div class="msg" id="weaponMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>バグ報告・改善要望</h2>
+      <div class="row"><button onclick="loadReports()">更新</button></div>
+      <div id="reports"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const SUPABASE_URL = "https://eoundtxbupxbrfccejlk.supabase.co";
+const ANON_KEY = "sb_publishable_uFZkixZQjcm7E3ZohcLw4Q_MktOtmn2";
+const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼の槍","火星の弓","フレイムソード"];
+
+let token = null, uid = null, cfg = {};
+
+const $ = id => document.getElementById(id);
+const msg = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = "msg " + (cls||""); };
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({
+    "apikey": ANON_KEY,
+    "Authorization": "Bearer " + (token || ANON_KEY),
+    "Content-Type": "application/json"
+  }, opts.headers || {});
+  const res = await fetch(SUPABASE_URL + path, Object.assign({}, opts, { headers }));
+  return res;
+}
+
+async function login() {
+  const email = $("email").value.trim(), pass = $("pass").value;
+  if (!email || !pass) { msg("loginMsg", "メールとパスワードを入れてください", "err"); return; }
+  msg("loginMsg", "ログイン中…");
+  const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
+    method: "POST",
+    headers: { "apikey": ANON_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password: pass })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.access_token) { msg("loginMsg", "ログインできません：" + (data.error_description || data.msg || res.status), "err"); return; }
+  token = data.access_token; uid = data.user.id;
+
+  const chk = await api("/rest/v1/staff?select=user_id&user_id=eq." + uid);
+  const rows = await chk.json();
+  if (!rows.length) {
+    msg("loginMsg", "このアカウントは運営スタッフに登録されていません（staffテーブルに追加してください）", "err");
+    token = null; return;
+  }
+
+  $("loginCard").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("logout").classList.remove("hidden");
+  $("who").textContent = (data.user.email || "") + " としてログイン中";
+  await loadAll();
+}
+
+function logout() { location.reload(); }
+
+async function loadAll() { await loadConfig(); await loadStats(); await loadReports(); }
+
+async function loadConfig() {
+  const res = await api("/rest/v1/config?select=key,value");
+  const rows = await res.json();
+  cfg = {};
+  rows.forEach(r => cfg[r.key] = r.value);
+
+  $("spawnBtn").textContent = cfg.spawnOff === "1" ? "止めている" : "出る（ON）";
+  $("spawnBtn").className = cfg.spawnOff === "1" ? "danger" : "on";
+  $("monsterMul").value = cfg.monsterMul || "1";
+  $("dropMul").value = cfg.dropMul || "1";
+
+  const day = parseInt(cfg.dayOverride || "0", 10);
+  [0,1,2].forEach(i => $("day"+i).className = (i===day ? "on" : ""));
+
+  let html = "<tr><th>武器</th><th>攻撃力</th></tr>";
+  WEAPONS.forEach(w => {
+    const v = cfg["atk:" + w];
+    html += `<tr><td>${w}</td><td><input id="atk_${w}" type="number" min="1" step="1" value="${v || ""}" placeholder="既定値" /></td></tr>`;
+  });
+  $("weapons").innerHTML = html;
+}
+
+async function put(key, value) {
+  const res = await api("/rest/v1/config?on_conflict=key", {
+    method: "POST",
+    headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([{ key, value: String(value) }])
+  });
+  if (!res.ok) throw new Error(await res.text());
+  cfg[key] = String(value);
+}
+
+async function toggleSpawn() {
+  const off = cfg.spawnOff === "1" ? "0" : "1";
+  try { await put("spawnOff", off); msg("monsterMsg", "保存しました", "ok"); await loadConfig(); }
+  catch (e) { msg("monsterMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveMonster() {
+  try {
+    await put("monsterMul", $("monsterMul").value || "1");
+    await put("dropMul", $("dropMul").value || "1");
+    msg("monsterMsg", "保存しました（ゲームに反映されます）", "ok");
+  } catch (e) { msg("monsterMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function setDay(i) {
+  try { await put("dayOverride", i); msg("dayMsg", "保存しました：" + ["自動","昼固定","夜固定"][i], "ok"); await loadConfig(); }
+  catch (e) { msg("dayMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function saveWeapons() {
+  try {
+    for (const w of WEAPONS) {
+      const v = $("atk_" + w).value.trim();
+      if (v !== "") await put("atk:" + w, v);
+    }
+    msg("weaponMsg", "保存しました（ゲームに反映されます）", "ok");
+  } catch (e) { msg("weaponMsg", "保存に失敗：" + e.message, "err"); }
+}
+
+async function loadStats() {
+  // 登録ユーザー数
+  const p = await api("/rest/v1/profiles?select=user_id", { headers: { "Prefer": "count=exact" } });
+  const cnt = p.headers.get("content-range");
+  const prof = await p.json();
+  $("registered").textContent = cnt ? cnt.split("/")[1] : prof.length;
+
+  // オンライン（2分以内に更新された人）
+  const since = new Date(Date.now() - 2*60*1000).toISOString();
+  const o = await api("/rest/v1/presence?select=user_id&updated_at=gt." + since, { headers: { "Prefer": "count=exact" } });
+  const ocnt = o.headers.get("content-range");
+  const ol = await o.json();
+  $("online").textContent = ocnt ? ocnt.split("/")[1] : ol.length;
+  msg("statMsg", "最終更新：" + new Date().toLocaleTimeString());
+}
+
+async function loadReports() {
+  const res = await api("/rest/v1/reports?select=name,body,created_at&order=created_at.desc&limit=50");
+  const rows = await res.json();
+  if (!rows.length) { $("reports").innerHTML = '<div class="msg">まだ報告はありません</div>'; return; }
+  $("reports").innerHTML = rows.map(r =>
+    `<div class="report">${esc(r.name || "名無し")}：${esc(r.body)}<br><small>${new Date(r.created_at).toLocaleString()}</small></div>`
+  ).join("");
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+</script>
+</body>
+</html>
