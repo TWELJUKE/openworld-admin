@@ -727,7 +727,8 @@ async function saveOperateWallet() {
 // ---------- デザイン表示（ボクセルのアイソメ描画） ----------
 let designTab = "monster";
 function allDesigns() {
-  const list = (typeof DESIGNS !== "undefined") ? DESIGNS.slice() : [];
+  let list = (typeof DESIGNS !== "undefined") ? DESIGNS.slice() : [];
+  if (typeof SKIN_DESIGNS !== "undefined") list = list.concat(SKIN_DESIGNS);
   Object.keys(cfg).filter(k => k.startsWith("design.")).forEach(k => {
     try { list.push(JSON.parse(cfg[k])); } catch (e) {}
   });
@@ -738,7 +739,17 @@ function designGrid(elId, cats, skinColors) {
   const el = $(elId); if (!el) return;
   const list = allDesigns().filter(d => cats.includes(d.category));
   if (elId === "skinGrid") {
-    el.innerHTML = SKINS.map((name, i) => {
+    // ボクセルスキンは実際のデザインを描く
+    const vox = (typeof SKIN_DESIGNS !== "undefined") ? SKIN_DESIGNS : [];
+    let html = vox.map((d, i) => {
+      const id = "skv" + i;
+      setTimeout(() => drawVoxel($(id), d), 0);
+      return `<div class="design-card"><canvas id="${id}" width="154" height="150"></canvas>
+        <div style="font-weight:bold;margin-top:6px">${esc(d.name)}</div>
+        <div class="sub">${esc(d.category || "skin")}</div></div>`;
+    }).join("");
+    // 通常スキンは色アイコン
+    html += SKINS.map((name, i) => {
       const cfgc = ["#ECEFF4","#D9483D","#4779D9","#4CB861","#E6C43F","#38383F","#E64D1E"][i];
       const id = "sk" + i;
       setTimeout(() => drawSkin($(id), cfgc), 0);
@@ -746,6 +757,7 @@ function designGrid(elId, cats, skinColors) {
         <div style="font-weight:bold;margin-top:6px">${esc(name)}</div>
         <div class="sub">${esc(defaultSkinRare(name))} レア</div></div>`;
     }).join("");
+    el.innerHTML = html;
     return;
   }
   if (!list.length) { el.innerHTML = '<div class="msg">まだありません</div>'; return; }
