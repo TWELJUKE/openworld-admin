@@ -120,6 +120,11 @@
           <input id="dropMul" type="number" step="0.1" min="0" max="10" value="1" />
         </div>
         <div class="row">
+          <label>同時に出る敵の上限</label>
+          <input id="maxAlive" type="number" min="0" max="60" value="12" />
+          <span class="sub">フィールドに同時にいるモンスターの数（0で既定12）</span>
+        </div>
+        <div class="row">
           <label>昼の長さ（分）</label>
           <input id="dayMinutes" type="number" min="1" max="720" value="120" />
           <label>夜の長さ（分）</label>
@@ -369,6 +374,11 @@ const WEAPONS = ["素手","木の剣","木の槍","木の弓","鉄の剣","鋼�
 const SKINS   = ["標準(白)","赤","青","緑","金","黒","フレイムドラゴン"];
 const ITEMS   = ["酸素の素","食料","肉","皮","鉱石","フレイムドラゴンの翼","フレイムドラゴンの頭","フレイムソードの設計図","フレイムドラゴンのスキンの設計図","ダークの証"];
 const MONSTERS = ["ストーンゴーレム","スパイダー","ゾンビ","骨弓兵","魔法使い","飛行型","近接の敵","鈍い敵","レッドドラゴン","ブルードラゴン","グリーンドラゴン","ダークドラゴン"];
+// ゲーム側の MonsterSpawner.AllSpecies と同じ一覧（ワイバーン含む）＋事務局で追加したモンスター
+const WYVERNS = ["レッドワイバーン","ブルーワイバーン","グリーンワイバーン","ダークワイバーン"];
+function spawnSpecies() {
+  return MONSTERS.concat(WYVERNS, designNames("monster")).filter((v, i, a) => a.indexOf(v) === i);
+}
 const AREAS = ["火山","異世界","宇宙","森林","氷山"];
 const ELEMS = ["無","火","水","木","光","闇"];
 
@@ -486,6 +496,7 @@ async function loadConfig() {
   if ($("masterBtn")) { $("masterBtn").textContent = cfg.master === "1" ? "ON" : "OFF"; $("masterBtn").className = cfg.master === "1" ? "on" : ""; }
   $("monsterMul").value = cfg.monsterMul || "1";
   $("dropMul").value = cfg.dropMul || "1";
+  if ($("maxAlive")) $("maxAlive").value = cfg.maxAlive || "12";
   if ($("dayMinutes")) $("dayMinutes").value = cfg.dayMinutes || "120";
   if ($("nightMinutes")) $("nightMinutes").value = cfg.nightMinutes || "120";
   if ($("nightAtk")) $("nightAtk").value = cfg.nightAtk || "1.3";
@@ -496,7 +507,7 @@ async function loadConfig() {
 
   // モンスター
   let mh = "<tr><th>モンスター</th><th>属性</th><th>HP（実値）</th><th>基本攻撃力</th><th>属性倍率</th></tr>";
-  MONSTERS.forEach(m => {
+  spawnSpecies().forEach(m => {
     const el = cfg["m." + m + ".elem"] || "無";
     const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
     mh += `<tr><td>${m}</td>
@@ -509,7 +520,7 @@ async function loadConfig() {
 
   // 出現テーブル
   let sh = "<tr><th>モンスター</th><th>出現頻度(0-100)</th><th>発生頻度(0-200%)</th><th>MAX個体数(0=無制限)</th></tr>";
-  MONSTERS.forEach(m => {
+  spawnSpecies().forEach(m => {
     const v = cfg["s." + curArea + "." + m];
     const fr = cfg["fr." + curArea + "." + m];
     const mx = cfg["mx." + curArea + "." + m];
@@ -618,6 +629,7 @@ async function saveField2() {
 async function saveMonster() {
   try {
     await put("monsterMul", $("monsterMul").value || "1");
+    if ($("maxAlive")) await put("maxAlive", $("maxAlive").value || "12");
     await put("dropMul", $("dropMul").value || "1");
     msg("monsterMsg", "保存しました（ゲームに反映されます）", "ok");
   } catch (e) { msg("monsterMsg", "保存に失敗：" + e.message, "err"); }
@@ -636,7 +648,7 @@ function pickArea(i) { curArea = i; buildAreaTabs(); loadConfig(); }
 
 async function saveMonsters() {
   try {
-    for (const m of MONSTERS) {
+    for (const m of spawnSpecies()) {
       await put("m." + m + ".elem", $("el_" + m).value);
       const hpa = $("hpa_" + m).value.trim(), atk = $("atk_" + m).value.trim(), mul = $("mul_" + m).value.trim();
       if (hpa !== "") await put("m." + m + ".hpabs", hpa);
@@ -649,7 +661,7 @@ async function saveMonsters() {
 
 async function saveSpawn() {
   try {
-    for (const m of MONSTERS) {
+    for (const m of spawnSpecies()) {
       const v = $("sp_" + curArea + "_" + m).value.trim();
       if (v !== "") await put("s." + curArea + "." + m, v);
       const fr = $("fr_" + curArea + "_" + m).value.trim();
@@ -820,7 +832,7 @@ function deleteEntry(kind, name) {
 }
 
 function renderDeleteLists() {
-  const mobs = designNames("monster");
+  const mobs = spawnSpecies();
   deleteList("monsterDelete", mobs, "monster");
   deleteList("weaponDelete", designNames(["weapon_melee","weapon","weapon_ranged"]), "weapon");
   deleteList("skinDelete", SKINS, "skin");
