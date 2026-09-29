@@ -310,11 +310,13 @@
       </section>
 
       <section class="card">
-        <h2>どのモンスターからドロップするか</h2>
-        <div class="row" id="dropMatTabs"></div>
-        <div class="sub" style="margin-bottom:8px">選んだモンスターから出る素材と、その確率(%)を決めます。</div>
+        <h2>モンスター → 素材 → 確率(％)</h2>
+        <div class="sub" style="margin-bottom:8px">モンスターと素材をプルダウンで選んで、そのドロップ確率(%)を決めます。「行を追加」で組み合わせを増やせます。</div>
         <table id="matDropTable"></table>
-        <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMatDrop()">保存</button></div>
+        <div class="row" style="margin-top:12px">
+          <button onclick="addDropRow()">行を追加</button>
+          <button class="primary" onclick="saveMatDrop()">保存</button>
+        </div>
         <div class="msg" id="matDropMsg"></div>
       </section>
 
@@ -503,8 +505,8 @@ async function loadConfig() {
 
   // ドロップ率
   let dh = "<tr><th>アイテム・素材</th><th>倍率</th></tr>";
-  ITEMS.forEach(it => {
-    dh += `<tr><td>${it}</td><td><input id="dp_${it}" type="number" step="0.1" min="0" value="${cfg["d."+it] || ""}" placeholder="1.0" style="width:110px" /></td></tr>`;
+  itemList().forEach(it => {
+    dh += `<tr><td>${esc(it)}</td><td><input id="dp_${it}" type="number" step="0.1" min="0" value="${cfg["d."+it] || ""}" placeholder="1.0" style="width:110px" /></td></tr>`;
   });
   $("drops").innerHTML = dh;
 
@@ -545,9 +547,9 @@ async function loadConfig() {
 
   // アイテム情報
   let ih = "<tr><th>ID</th><th>表示名</th><th>説明</th></tr>";
-  ITEMS.forEach(it => {
-    ih += `<tr><td>${it}</td>
-      <td><input id="in_${it}" value="${esc(cfg["i."+it+".name"] || "")}" placeholder="${it}" style="width:170px" /></td>
+  itemList().forEach(it => {
+    ih += `<tr><td>${esc(it)}</td>
+      <td><input id="in_${it}" value="${esc(cfg["i."+it+".name"] || "")}" placeholder="${esc(it)}" style="width:170px" /></td>
       <td><input id="id_${it}" value="${esc(cfg["i."+it+".desc"] || "")}" placeholder="説明" style="width:280px" /></td></tr>`;
   });
   $("itemInfo").innerHTML = ih;
@@ -559,6 +561,7 @@ async function loadConfig() {
   renderDeleteLists();
   renderMatRate();
   drawDropMatTabs();
+  dropRows = null;          // 保存済み設定から作り直す
   renderMatDropTable();
   renderAdded();
   renderDesigns();
@@ -643,7 +646,7 @@ async function saveSpawn() {
 
 async function saveDrops() {
   try {
-    for (const it of ITEMS) {
+    for (const it of itemList()) {
       const v = $("dp_" + it).value.trim();
       if (v !== "") await put("d." + it, v);
     }
@@ -668,7 +671,7 @@ async function saveSkins() {
 
 async function saveItemInfo() {
   try {
-    for (const it of ITEMS) {
+    for (const it of itemList()) {
       const n = $("in_" + it).value.trim(), d = $("id_" + it).value.trim();
       if (n !== "") await put("i." + it + ".name", n);
       if (d !== "") await put("i." + it + ".desc", d);
@@ -861,6 +864,8 @@ function drawVoxel(cv, d) {
     const p = projUnit(x, y, z);
     return [cx + p[0] * scale, cy + p[1] * scale];
   }
+  // 奥から手前の順に描く（奥行き = x+z、同点は y で）
+  const sorted = d.voxels.slice().sort((a, b) => (a[0] + a[2]) - (b[0] + b[2]) || a[1] - b[1]);
   sorted.forEach(v => {
     const p = proj(v[0] - minX, v[1] - minY, v[2] - minZ);
     const c = pal[v[3]] || "#aaaaaa";
@@ -1011,35 +1016,64 @@ async function addMatAdmin() {
   catch (e) { msg("matAddMsg", "失敗：" + e.message, "err"); }
 }
 
-// ---------- 素材のドロップ元 ----------
-let dropMatMonster = "";
-function drawDropMatTabs() {
-  const el = $("dropMatTabs"); if (!el) return;
-  const list = designNames("monster");
-  const names = list.length ? list : MONSTERS;
-  if (!dropMatMonster) dropMatMonster = names[0] || "";
-  el.innerHTML = names.map(n =>
-    `<button class="${dropMatMonster===n?'on':''}" onclick="pickDropMatMonster('${esc(n)}')">${esc(n)}</button>`).join("");
+// ---------- 素材のドロップ元（モンスター → 素材 → 確率% を1つの表に統合） ----------
+let dropRows = null;   // [{mon, mat}]  null = 未初期化（読込時に再構築）
+function monsterNames() {
+  const l = designNames("monster");
+  return l.length ? l : MONSTERS;
 }
-function pickDropMatMonster(n) { dropMatMonster = n; drawDropMatTabs(); renderMatDropTable(); }
+function loadDropRows() {
+  const rows = [];
+  Object.keys(cfg).filter(k => k.startsWith("md.")).forEach(k => {
+    const p = k.split(".");
+    if (p.length >= 3) rows.push({ mon: p[1], mat: p.slice(2).join(".") });
+  });
+  if (!rows.length) rows.push({ mon: monsterNames()[0] || "", mat: matList()[0] || "" });
+  dropRows = rows;
+}
+function drawDropMatTabs() { }   // 旧・モンスタータブ（統合により不要）
 function renderMatDropTable() {
   const el = $("matDropTable"); if (!el) return;
+  if (!dropRows) loadDropRows();
+  const mons = monsterNames();
   const mats = matList();
-  let h = "<tr><th>素材</th><th>このモンスターから出る確率(%)</th></tr>";
-  mats.forEach(m => {
-    const key = "md." + dropMatMonster + "." + m;
-    h += `<tr><td>${esc(m)}</td><td><input id="md_${m}" type="number" min="0" max="100" value="${cfg[key] === undefined ? "" : cfg[key]}" placeholder="0" style="width:100px" /></td></tr>`;
+  const monOpts = sel => mons.map(m => `<option value="${esc(m)}" ${m === sel ? "selected" : ""}>${esc(m)}</option>`).join("");
+  const matOpts = sel => mats.map(m => `<option value="${esc(m)}" ${m === sel ? "selected" : ""}>${esc(m)}</option>`).join("");
+  let h = "<tr><th>モンスター</th><th>素材</th><th>確率(%)</th><th></th></tr>";
+  dropRows.forEach((r, i) => {
+    const key = "md." + r.mon + "." + r.mat;
+    const v = (r.mon && r.mat && cfg[key] !== undefined) ? cfg[key] : "";
+    h += `<tr>
+      <td><select id="dr_m${i}">${monOpts(r.mon)}</select></td>
+      <td><select id="dr_t${i}">${matOpts(r.mat)}</select></td>
+      <td><input id="dr_p${i}" type="number" min="0" max="100" value="${v}" placeholder="0" style="width:100px" /></td>
+      <td><button onclick="removeDropRow(${i})">削除</button></td></tr>`;
   });
   el.innerHTML = h;
 }
+function addDropRow() {
+  if (!dropRows) loadDropRows();
+  dropRows.push({ mon: monsterNames()[0] || "", mat: matList()[0] || "" });
+  renderMatDropTable();
+}
+function removeDropRow(i) {
+  if (!dropRows) loadDropRows();
+  dropRows.splice(i, 1);
+  if (!dropRows.length) dropRows.push({ mon: monsterNames()[0] || "", mat: matList()[0] || "" });
+  renderMatDropTable();
+}
 async function saveMatDrop() {
-  if (!dropMatMonster) return;
+  if (!dropRows) loadDropRows();
   try {
-    for (const m of matList()) {
-      const v = $("md_" + m).value.trim();
-      if (v !== "") await put("md." + dropMatMonster + "." + m, v);
+    for (let i = 0; i < dropRows.length; i++) {
+      const monEl = $("dr_m" + i), matEl = $("dr_t" + i), pEl = $("dr_p" + i);
+      if (!monEl || !matEl || !pEl) continue;
+      const mon = monEl.value, mat = matEl.value, v = pEl.value.trim();
+      if (!mon || !mat) continue;
+      if (v === "" || v === "0") continue;
+      await put("md." + mon + "." + mat, v);
     }
-    msg("matDropMsg", "保存しました（" + dropMatMonster + "）", "ok");
+    msg("matDropMsg", "保存しました", "ok");
   } catch (e) { msg("matDropMsg", "保存に失敗：" + e.message, "err"); }
 }
 
