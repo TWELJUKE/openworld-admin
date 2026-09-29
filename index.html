@@ -44,6 +44,9 @@
   table { width:100%; border-collapse:collapse; }
   table th, table td { border-bottom:1px solid #22222c; padding:6px 8px; text-align:left; font-size:13px; }
   table input, table select { background:#0e0e14; color:#eee; border:1px solid #2a2a36; border-radius:6px; padding:6px; }
+    .mrow{display:flex;gap:4px;align-items:center;margin:2px 0}
+    .mrow select{width:210px}
+    .mrow button.del{padding:2px 8px;background:#a33;color:#fff;border:0;border-radius:4px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -211,7 +214,7 @@
 
       <section class="card">
         <h2>武器ごとのクラフト必要素材</h2>
-        <div class="sub" style="margin-bottom:8px">例：フレイムドラゴンの翼:3, フレイムドラゴンの頭:1（素材名:個数をカンマ区切り）</div>
+        <div class="sub" style="margin-bottom:8px">素材をプルダウンで選んで個数を入れてください。「＋素材を追加」で複数指定できます。</div>
         <table id="weaponMats"></table>
         <div class="row" style="margin-top:12px"><button class="primary" onclick="saveWeaponMats()">保存</button></div>
         <div class="msg" id="wmatMsg"></div>
@@ -927,23 +930,60 @@ async function removeDesign(key) {
 
 
 // ---------- 武器・スキンのクラフト素材 ----------
+// クラフト必要素材：素材をプルダウンで選ぶ方式
+const matEdit = {};            // prefix -> { 名前: [[素材, 個数], ...] }
+const matRenderers = {};       // prefix -> 再描画関数
+function parseMatSpec(s) {
+  if (!s) return [];
+  return s.split(",").map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.lastIndexOf(":");
+    if (i < 0) return [x, 1];
+    const n = parseInt(x.substring(i + 1), 10);
+    return [x.substring(0, i).trim(), isNaN(n) ? 1 : n];
+  });
+}
+function matSpecFrom(p, n) {
+  return (matEdit[p][n] || []).filter(r => r[0]).map(r => r[0] + ":" + r[1]).join(", ");
+}
+function matOptions(sel) {
+  let h = `<option value="">（素材を選ぶ）</option>`;
+  matList().forEach(m => { h += `<option value="${esc(m)}"${m === sel ? " selected" : ""}>${esc(m)}</option>`; });
+  return h;
+}
 function matRows(elId, names, prefix, saveFn) {
   const el = $(elId); if (!el) return;
-  let h = "<tr><th>名前</th><th>必要素材（素材名:個数,素材名:個数）</th></tr>";
+  if (!matEdit[prefix]) {
+    matEdit[prefix] = {};
+    names.forEach(n => { matEdit[prefix][n] = parseMatSpec(cfg[prefix + "." + n]); });
+  }
+  let h = "<tr><th>名前</th><th>必要素材（プルダウンで選択）</th><th>クラフト</th></tr>";
   names.forEach(n => {
-    h += `<tr><td>${esc(n)}</td><td><input id="${prefix}_${n}" value="${esc(cfg[prefix + "." + n] || "")}" placeholder="例：フレイムドラゴンの翼:3, フレイムドラゴンの頭:1" style="width:380px" /></td>
-      <td><label><input type="checkbox" id="nc_${n}" ${cfg["craftoff." + n] === "1" ? "checked" : ""}/> クラフト不可</label></td></tr>`;
+    if (!matEdit[prefix][n]) matEdit[prefix][n] = [];
+    const rows = matEdit[prefix][n];
+    const rh = rows.map((r, i) => `<div class="mrow">
+        <select onchange="setMat('${prefix}','${esc(n)}',${i},this.value)">${matOptions(r[0])}</select>
+        <input type="number" min="1" value="${r[1]}" style="width:64px" onchange="setMatN('${prefix}','${esc(n)}',${i},this.value)" />
+        <button class="del" onclick="delMat('${prefix}','${esc(n)}',${i})">×</button>
+      </div>`).join("");
+    h += `<tr><td>${esc(n)}</td><td>${rh}<button onclick="addMatRow('${prefix}','${esc(n)}')">＋素材を追加</button></td>
+      <td><label><input type="checkbox" id="nc_${prefix}_${n}" ${cfg["craftoff." + n] === "1" ? "checked" : ""}/> クラフト不可</label></td></tr>`;
   });
   el.innerHTML = h;
 }
+function reMat(prefix) { const f = matRenderers[prefix]; if (f) f(); }
+function setMat(p, n, i, v) { matEdit[p][n][i][0] = v; reMat(p); }
+function setMatN(p, n, i, v) { matEdit[p][n][i][1] = Math.max(1, parseInt(v, 10) || 1); reMat(p); }
+function addMatRow(p, n) { matEdit[p][n].push(["", 1]); reMat(p); }
+function delMat(p, n, i) { matEdit[p][n].splice(i, 1); reMat(p); }
 async function saveMatsFrom(elId, names, prefix, msgId) {
   try {
     for (const n of names) {
-      const v = $(prefix + "_" + n).value.trim();
+      const v = matSpecFrom(prefix, n);
       if (v !== "") await put(prefix + "." + n, v);
-      const nc = $("nc_" + n);
+      const nc = $("nc_" + prefix + "_" + n);
       if (nc && nc.checked) await put("craftoff." + n, "1");
     }
+    await loadConfig();
     msg(msgId, "保存しました", "ok");
   } catch (e) { msg(msgId, "保存に失敗：" + e.message, "err"); }
 }
@@ -951,8 +991,10 @@ function weaponNameList() {
   return WEAPONS.concat(designNames(["weapon_melee", "weapon", "weapon_ranged"])).filter((v, i, a) => a.indexOf(v) === i);
 }
 function renderWeaponMats() { matRows("weaponMats", weaponNameList(), "wm"); }
+matRenderers["wm"] = renderWeaponMats;
 async function saveWeaponMats() { await saveMatsFrom("weaponMats", weaponNameList(), "wm", "wmatMsg"); }
 function renderSkinMats() { matRows("skinMats", SKINS, "km"); }
+matRenderers["km"] = renderSkinMats;
 async function saveSkinMats() { await saveMatsFrom("skinMats", SKINS, "km", "kmatMsg"); }
 
 // ---------- アイテム・素材の追加 ----------
