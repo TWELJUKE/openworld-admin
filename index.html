@@ -160,7 +160,7 @@
 
       <section class="card">
         <h2>モンスターごとのステータス設定</h2>
-        <div class="sub" style="margin-bottom:8px">属性：火は木に、木は水に、水は火に、光と闇は互いに強い。HP（実値）を入れると倍率より優先。属性倍率は「得意ならこの値を掛け算、苦手ならこの値で割り算」します。</div>
+        <div class="sub" style="margin-bottom:8px">HPは実値で入力。属性倍率は「得意ならこの値を掛け算、苦手ならこの値で割り算」（例：1.1なら水武器で火モンスターに×1.1、火武器で水モンスターに÷1.1）。</div>
         <table id="monsters"></table>
         <div class="row" style="margin-top:12px"><button class="primary" onclick="saveMonsters()">保存</button></div>
         <div class="msg" id="monMsg"></div>
@@ -473,7 +473,7 @@ async function loadConfig() {
   [0,1,2].forEach(i => $("day"+i).className = (i===day ? "on" : ""));
 
   // モンスター
-  let mh = "<tr><th>モンスター</th><th>属性</th><th>HP（実値）</th><th>基本攻撃力</th><th>属性倍率</th><th>速度倍率</th><th>HP倍率</th><th>攻撃倍率</th></tr>";
+  let mh = "<tr><th>モンスター</th><th>属性</th><th>HP（実値）</th><th>基本攻撃力</th><th>属性倍率</th></tr>";
   MONSTERS.forEach(m => {
     const el = cfg["m." + m + ".elem"] || "無";
     const opts = ELEMS.map(e => `<option value="${e}" ${e===el?"selected":""}>${e}</option>`).join("");
@@ -481,18 +481,20 @@ async function loadConfig() {
       <td><select id="el_${m}">${opts}</select></td>
       <td><input id="hpa_${m}" type="number" min="0" value="${cfg["m."+m+".hpabs"] || ""}" placeholder="既定" style="width:100px" /></td>
       <td><input id="atk_${m}" type="number" min="0" value="${cfg["m."+m+".atk"] || ""}" placeholder="既定" style="width:100px" /></td>
-      <td><input id="mul_${m}" type="number" step="0.1" min="1" value="${cfg["m."+m+".mul"] || ""}" placeholder="1.1" style="width:80px" /></td>
-      <td><input id="sp_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".spd"] || ""}" placeholder="1.0" style="width:80px" /></td>
-      <td><input id="hp_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".hp"] || ""}" placeholder="1.0" style="width:80px" /></td>
-      <td><input id="dm_${m}" type="number" step="0.1" min="0" value="${cfg["m."+m+".dmg"] || ""}" placeholder="1.0" style="width:80px" /></td></tr>`;
+      <td><input id="mul_${m}" type="number" step="0.1" min="1" value="${cfg["m."+m+".mul"] || ""}" placeholder="1.1" style="width:90px" /></td></tr>`;
   });
   $("monsters").innerHTML = mh;
 
   // 出現テーブル
-  let sh = "<tr><th>モンスター</th><th>頻度(0-100)</th></tr>";
+  let sh = "<tr><th>モンスター</th><th>出現頻度(0-100)</th><th>発生頻度(0-200%)</th><th>MAX個体数(0=無制限)</th></tr>";
   MONSTERS.forEach(m => {
     const v = cfg["s." + curArea + "." + m];
-    sh += `<tr><td>${m}</td><td><input id="sp_${curArea}_${m}" type="number" min="0" max="100" value="${v === undefined ? "" : v}" placeholder="標準30" style="width:110px" /></td></tr>`;
+    const fr = cfg["fr." + curArea + "." + m];
+    const mx = cfg["mx." + curArea + "." + m];
+    sh += `<tr><td>${m}</td>
+      <td><input id="sp_${curArea}_${m}" type="number" min="0" max="100" value="${v === undefined ? "" : v}" placeholder="標準30" style="width:100px" /></td>
+      <td><input id="fr_${curArea}_${m}" type="number" min="0" max="200" value="${fr === undefined ? "" : fr}" placeholder="100" style="width:100px" /></td>
+      <td><input id="mx_${curArea}_${m}" type="number" min="0" value="${mx === undefined ? "" : mx}" placeholder="0" style="width:100px" /></td></tr>`;
   });
   $("spawnTable").innerHTML = sh;
 
@@ -521,7 +523,7 @@ async function loadConfig() {
   $("weapons").innerHTML = html;
 
   // スキン（属性・属性ダメージ・体力・属性防御・レア度）
-  let kh = "<tr><th>スキン</th><th>属性</th><th>属性ダメージ</th><th>体力</th><th>属性耐久</th><th>耐久倍率</th><th>レア度</th></tr>";
+  let kh = "<tr><th>スキン</th><th>属性</th><th>体力</th><th>属性耐久</th><th>耐久倍率</th><th>レア度</th></tr>";
   SKINS.forEach(k => {
     const el = cfg["k." + k + ".elem"] || "無";
     const de = cfg["k." + k + ".defelem"] || "無";
@@ -529,7 +531,6 @@ async function loadConfig() {
     const dopts = ELEMS.map(e => `<option value="${e}" ${e===de?"selected":""}>${e}</option>`).join("");
     kh += `<tr><td>${k}</td>
       <td><select id="kel_${k}">${opts}</select></td>
-      <td><input id="kbn_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".bonus"] || ""}" placeholder="0" style="width:80px" /></td>
       <td><input id="khp_${k}" type="number" min="0" step="1" value="${cfg["k."+k+".hp"] || ""}" placeholder="0" style="width:80px" /></td>
       <td><select id="kde_${k}">${dopts}</select></td>
       <td><input id="kdf_${k}" type="number" min="0" step="0.1" value="${cfg["k."+k+".defmul"] || ""}" placeholder="1.1" style="width:80px" /></td>
@@ -614,10 +615,6 @@ async function saveMonsters() {
   try {
     for (const m of MONSTERS) {
       await put("m." + m + ".elem", $("el_" + m).value);
-      const hp = $("hp_" + m).value.trim(), dm = $("dm_" + m).value.trim(), sp = $("sp_" + m).value.trim();
-      if (hp !== "") await put("m." + m + ".hp", hp);
-      if (dm !== "") await put("m." + m + ".dmg", dm);
-      if (sp !== "") await put("m." + m + ".spd", sp);
       const hpa = $("hpa_" + m).value.trim(), atk = $("atk_" + m).value.trim(), mul = $("mul_" + m).value.trim();
       if (hpa !== "") await put("m." + m + ".hpabs", hpa);
       if (atk !== "") await put("m." + m + ".atk", atk);
@@ -632,6 +629,10 @@ async function saveSpawn() {
     for (const m of MONSTERS) {
       const v = $("sp_" + curArea + "_" + m).value.trim();
       if (v !== "") await put("s." + curArea + "." + m, v);
+      const fr = $("fr_" + curArea + "_" + m).value.trim();
+      if (fr !== "") await put("fr." + curArea + "." + m, fr);
+      const mx = $("mx_" + curArea + "_" + m).value.trim();
+      if (mx !== "") await put("mx." + curArea + "." + m, mx);
     }
     msg("spawnMsg", "保存しました（" + AREAS[curArea] + "）", "ok");
   } catch (e) { msg("spawnMsg", "保存に失敗：" + e.message, "err"); }
@@ -653,8 +654,6 @@ async function saveSkins() {
       await put("k." + k + ".elem", $("kel_" + k).value);
       await put("k." + k + ".defelem", $("kde_" + k).value);
       await put("k." + k + ".rare", $("kra_" + k).value);
-      const b = $("kbn_" + k).value.trim();
-      if (b !== "") await put("k." + k + ".bonus", b);
       const hp = $("khp_" + k).value.trim();
       if (hp !== "") await put("k." + k + ".hp", hp);
       const df = $("kdf_" + k).value.trim();
@@ -726,7 +725,16 @@ async function saveOperateWallet() {
 
 // ---------- デザイン表示（ボクセルのアイソメ描画） ----------
 let designTab = "monster";
+let designsLoadTried = false;
 function allDesigns() {
+  if (typeof DESIGNS === "undefined" && !designsLoadTried) {
+    designsLoadTried = true;
+    const sc = document.createElement("script");
+    sc.src = "designs.js?ts=" + Date.now();
+    sc.onload = () => { renderAll(); };
+    sc.onerror = () => banner("designs.js を読み込めませんでした（デザイン一覧を更新してください）");
+    document.head.appendChild(sc);
+  }
   let list = (typeof DESIGNS !== "undefined") ? DESIGNS.slice() : [];
   if (typeof SKIN_DESIGNS !== "undefined") list = list.concat(SKIN_DESIGNS);
   Object.keys(cfg).filter(k => k.startsWith("design.")).forEach(k => {
