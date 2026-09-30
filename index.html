@@ -121,8 +121,8 @@
         </div>
         <div class="row">
           <label>同時に出る敵の上限</label>
-          <input id="maxAlive" type="number" min="0" max="60" value="12" />
-          <span class="sub">フィールドに同時にいるモンスターの数（0で既定12）</span>
+          <input id="maxAlive" type="number" min="0" max="300" value="12" />
+          <span class="sub">フィールドに同時にいるモンスターの数（0で既定12／最大300）</span>
         </div>
         <div class="row">
           <label>昼の長さ（分）</label>
@@ -194,7 +194,7 @@
       <section class="card">
         <h2>エリアごとの出現テーブル</h2>
         <div class="row" id="areaTabs"></div>
-        <div class="sub" style="margin-bottom:8px">出現頻度＝出やすさの割合 / 発生頻度＝そのモンスターが実際に現れる確率(%) / MAX個体数＝同時にいる上限（0は無制限）</div>
+        <div class="sub" style="margin-bottom:8px">出現頻度＝出やすさの割合(0-100) / 発生頻度＝そのモンスターが実際に現れる確率(%) / MAX個体数＝同時にいる上限（0は無制限）。この表に載っている種類だけがそのエリアに出ます（未設定＝出ない）。</div>
         <table id="spawnTable"></table>
         <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSpawn()">保存</button></div>
         <div class="msg" id="spawnMsg"></div>
