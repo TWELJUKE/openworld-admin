@@ -194,7 +194,7 @@
       <section class="card">
         <h2>エリアごとの出現テーブル</h2>
         <div class="row" id="areaTabs"></div>
-        <div class="sub" style="margin-bottom:8px">出現頻度＝出やすさの割合(0-100) / 発生頻度＝そのモンスターが実際に現れる確率(%) / MAX個体数＝同時にいる上限（0は無制限）。この表に載っている種類だけがそのエリアに出ます（未設定＝出ない）。</div>
+        <div class="sub" style="margin-bottom:8px">出現頻度＝出やすさの割合(0-100) / 発生頻度＝そのモンスターが実際に現れる確率(%) / MAX個体数＝そのエリアに同時にいる上限（他のエリアとは別々に数えます／0は無制限）。この表に載っている種類だけがそのエリアに出ます（未設定＝出ない）。</div>
         <table id="spawnTable"></table>
         <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSpawn()">保存</button></div>
         <div class="msg" id="spawnMsg"></div>
@@ -519,7 +519,7 @@ async function loadConfig() {
   $("monsters").innerHTML = mh;
 
   // 出現テーブル
-  let sh = "<tr><th>モンスター</th><th>出現頻度(0-100)</th><th>発生頻度(0-200%)</th><th>MAX個体数(0=無制限)</th></tr>";
+  let sh = "<tr><th>モンスター</th><th>出現頻度(0-100)</th><th>発生頻度(0-200%)</th><th>MAX個体数(このエリア・0=無制限)</th></tr>";
   spawnSpecies().forEach(m => {
     const v = cfg["s." + curArea + "." + m];
     const fr = cfg["fr." + curArea + "." + m];
